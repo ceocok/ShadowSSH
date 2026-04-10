@@ -71,7 +71,7 @@ shadowssh/
 
 ## 快速开始
 
-### 方式一：直接使用已发布镜像
+### 方式一：直接使用已发布镜像或使用项目文件内的docker-compose.yml进行本地build
 
 ```bash
 mkdir -p /opt/shadowssh
@@ -121,9 +121,9 @@ EOF
 启动：
 
 ```bash
-docker compose pull
 docker compose up -d
 ```
+
 
 默认访问地址：
 
