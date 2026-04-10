@@ -1,7 +1,9 @@
 services:
   frontend:
-    image: ceocok/shadowssh-frontend:latest
-    pull_policy: always
+    build:
+      context: .
+      dockerfile: packages/frontend/Dockerfile
+    image: shadowssh-frontend:local
     container_name: shadowssh-frontend
     restart: unless-stopped
     ports:
@@ -12,8 +14,10 @@ services:
       - shadowssh-network
 
   backend:
-    image: ceocok/shadowssh-backend:latest
-    pull_policy: always
+    build:
+      context: .
+      dockerfile: packages/backend/Dockerfile
+    image: shadowssh-backend:local
     container_name: shadowssh-backend
     restart: unless-stopped
     environment:
@@ -31,5 +35,5 @@ networks:
     enable_ipv6: true
     ipam:
       config:
-        - subnet: fd01::/80    
-          gateway: fd01::1    
+        - subnet: fd01::/80
+          gateway: fd01::1
