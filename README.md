@@ -159,12 +159,10 @@ npm run dev:frontend
 
 ### 当前 compose 行为
 
-`docker-compose.yml` 当前是生产部署版：
+`docker-compose.yml` 可进行本地build部署：
 
-- 不再本地 build
-- 直接拉取远端镜像
-- 自动重启
-- 将宿主机 `./data` 挂载到容器 `/app/data`
+- 前端本地构建：packages/frontend/Dockerfile
+- 后端本地构建：packages/backend/Dockerfile
 
 ### 数据目录
 
