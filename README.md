@@ -71,7 +71,7 @@ shadowssh/
 
 ## 快速开始
 
-### 方式一：直接使用已发布镜像或使用项目文件内的docker-compose.yml进行本地build
+### 方式一：直接使用已发布镜像进行部署
 
 ```bash
 mkdir -p /opt/shadowssh
