@@ -87,7 +87,7 @@ docker compose up -d
 
 默认访问地址：
 
-- [http://localhost:18111](http://localhost:18111)
+- [http://127.0.0.1:18111](http://127.0.0.1:18111)
 
 首次启动时会进入初始化页面，用于创建管理员账号和密码。
 
@@ -113,7 +113,7 @@ npm run dev:frontend
 
 前端默认开发地址通常为：
 
-- [http://localhost:5173](http://localhost:5173)
+- [http://127.0.0.1:5173](http://127.0.0.1:5173)
 
 ## Docker 运行说明
 
