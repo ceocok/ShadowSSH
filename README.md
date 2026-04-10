@@ -72,7 +72,7 @@ shadowssh/
 ## 快速开始
 
 ### 方式一：直接使用已发布镜像进行部署
-
+复制以下命令在终端运行
 ```bash
 mkdir -p /opt/shadowssh
 cd /opt/shadowssh
