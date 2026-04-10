@@ -1,49 +1,21 @@
 {
-  "name": "nexus-terminal",
-  "version": "1.0.0",
-  "main": "index.js",
+  "name": "shadowssh",
+  "version": "0.1.0",
   "private": true,
+  "description": "ShadowSSH monorepo for the lightweight web SSH client.",
   "workspaces": [
     "packages/*"
   ],
-  "directories": {
-    "doc": "doc"
-  },
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "postinstall": "patch-package"
+    "dev:frontend": "npm run dev --workspace packages/frontend",
+    "dev:backend": "npm run dev --workspace packages/backend",
+    "build": "npm run build --workspace packages/frontend && npm run build --workspace packages/backend",
+    "build:frontend": "npm run build --workspace packages/frontend",
+    "build:backend": "npm run build --workspace packages/backend",
+    "docker:build:frontend": "docker buildx build --platform linux/arm64 -f packages/frontend/Dockerfile -t shadowssh-frontend:arm64-alpine --load .",
+    "docker:build:backend": "docker buildx build --platform linux/arm64 -f packages/backend/Dockerfile -t shadowssh-backend:arm64-alpine --load ."
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Heavrnl/nexus-terminal.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/Heavrnl/nexus-terminal/issues"
-  },
-  "homepage": "https://github.com/Heavrnl/nexus-terminal#readme",
-  "description": "",
-  "dependencies": {
-    "archiver-zip-encrypted": "^2.0.0",
-    "axios": "^1.8.4",
-    "element-plus": "^2.9.11",
-    "fs-extra": "^11.3.0",
-    "pinia-plugin-persistedstate": "^4.2.0",
-    "plist": "^3.1.0",
-    "vuedraggable": "^4.1.0",
-    "ws": "^8.18.1"
-  },
-  "devDependencies": {
-    "@tailwindcss/postcss": "^4.1.4",
-    "@types/qrcode": "^1.5.5",
-    "@types/speakeasy": "^2.0.10",
-    "patch-package": "^8.0.0",
-    "qrcode": "^1.5.4",
-    "speakeasy": "^2.0.0",
-    "sqlite3": "^5.1.7"
-  },
+  "license": "MIT",
   "overrides": {
     "esbuild": "^0.25.0"
   }

@@ -25,22 +25,16 @@ import {
 import { SshSuspendService } from '../ssh-suspend/ssh-suspend.service';
 import { SftpService } from '../sftp/sftp.service';
 import { cleanupClientConnection } from './utils';
-import { clientStates } from './state';
+import { clientStates, statusMonitorService } from './state';
 import { temporaryLogStorageService } from '../ssh-suspend/temporary-log-storage.service'; 
 
 // Handlers
-import { handleRdpProxyConnection } from './handlers/rdp.handler';
 import {
     handleSshConnect,
     handleSshInput,
     handleSshResize,
     handleSshResumeSuccess
 } from './handlers/ssh.handler';
-import {
-    handleDockerGetStatus,
-    handleDockerCommand,
-    handleDockerGetStats
-} from './handlers/docker.handler';
 import {
     handleSftpOperation,
     handleSftpUploadStart,
@@ -51,18 +45,13 @@ import {
 export function initializeConnectionHandler(wss: WebSocketServer, sshSuspendService: SshSuspendService, sftpService: SftpService): void { // +++ Add sftpService parameter +++
     wss.on('connection', (ws: AuthenticatedWebSocket, request: Request) => {
         ws.isAlive = true;
-        const isRdpProxy = (request as any).isRdpProxy;
         const clientIp = (request as any).clientIpAddress || 'unknown'; // Preserved from upgrade handler
 
-        console.log(`WebSocket：客户端 ${ws.username} (ID: ${ws.userId}, IP: ${clientIp}, RDP Proxy: ${isRdpProxy}) 已连接。`);
+        console.log(`WebSocket：客户端 ${ws.username} (ID: ${ws.userId}, IP: ${clientIp}) 已连接。`);
 
         ws.on('pong', () => { ws.isAlive = true; });
 
-        if (isRdpProxy) {
-            handleRdpProxyConnection(ws, request);
-        } else {
-            // Standard SSH/SFTP/Docker connection
-            ws.on('message', async (message: RawData) => {
+        ws.on('message', async (message: RawData) => {
                 let parsedMessage: any;
                 try {
                     parsedMessage = JSON.parse(message.toString());
@@ -93,18 +82,12 @@ export function initializeConnectionHandler(wss: WebSocketServer, sshSuspendServ
                         case 'ssh:resize':
                             handleSshResize(ws, payload);
                             break;
+                        case 'status:refresh':
+                            if (sessionId) {
+                                void statusMonitorService.requestStatusRefresh(sessionId);
+                            }
+                            break;
 
-                        // Docker Cases
-                        case 'docker:get_status':
-                            await handleDockerGetStatus(ws, sessionId);
-                            break;
-                        case 'docker:command':
-                            await handleDockerCommand(ws, sessionId, payload);
-                            break;
-                        case 'docker:get_stats':
-                            await handleDockerGetStats(ws, sessionId, payload);
-                            break;
-                        
                         // SFTP Cases (generic operations)
                         case 'sftp:readdir':
                         case 'sftp:stat':
@@ -435,18 +418,17 @@ export function initializeConnectionHandler(wss: WebSocketServer, sshSuspendServ
                     console.error(`WebSocket: 处理来自 ${ws.username} (会话: ${sessionId}) 的消息 (${type}) 时发生顶层错误:`, error);
                     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'error', payload: `处理消息时发生内部错误: ${error.message}` }));
                 }
-            });
+        });
 
-            ws.on('close', (code, reason) => {
-                console.log(`WebSocket：客户端 ${ws.username} (会话: ${ws.sessionId}) 已断开连接。代码: ${code}, 原因: ${reason.toString()}`);
-                cleanupClientConnection(ws.sessionId);
-            });
+        ws.on('close', (code, reason) => {
+            console.log(`WebSocket：客户端 ${ws.username} (会话: ${ws.sessionId}) 已断开连接。代码: ${code}, 原因: ${reason.toString()}`);
+            cleanupClientConnection(ws.sessionId);
+        });
 
-            ws.on('error', (error) => {
-                console.error(`WebSocket：客户端 ${ws.username} (会话: ${ws.sessionId}) 发生错误:`, error);
-                cleanupClientConnection(ws.sessionId); // Ensure cleanup on error too
-            });
-        }
+        ws.on('error', (error) => {
+            console.error(`WebSocket：客户端 ${ws.username} (会话: ${ws.sessionId}) 发生错误:`, error);
+            cleanupClientConnection(ws.sessionId); // Ensure cleanup on error too
+        });
     });
 
     // 监听 SshSuspendService 发出的会话自动终止事件

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onBeforeUnmount, watch, nextTick, watchEffect } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick, watchEffect } from 'vue';
 import { Terminal, ITerminalAddon, IDisposable } from 'xterm';
 import { useDeviceDetection } from '../composables/useDeviceDetection';
 import { useAppearanceStore } from '../stores/appearance.store';
@@ -49,6 +49,7 @@ let currentFontSizeOnPinchStart = 0;
 // --- Appearance Store ---
 const appearanceStore = useAppearanceStore();
 const {
+  currentUiTheme,
   effectiveTerminalTheme,
   currentTerminalFontFamily,
   currentTerminalFontSize,
@@ -63,6 +64,14 @@ const {
   terminalTextShadowColor,
   initialAppearanceDataLoaded, 
 } = storeToRefs(appearanceStore);
+
+const terminalWrapperStyle = computed(() => ({
+  background: effectiveTerminalTheme.value.background || currentUiTheme.value['--terminal-shell-bg'] || '#1f1f1f',
+  '--terminal-shell-bg': effectiveTerminalTheme.value.background || currentUiTheme.value['--terminal-shell-bg'] || '#1f1f1f',
+  '--terminal-scrollbar-track': currentUiTheme.value['--terminal-scrollbar-track'] || '#1f1f1f',
+  '--terminal-scrollbar-thumb': currentUiTheme.value['--terminal-scrollbar-thumb'] || 'rgba(148, 163, 184, 0.55)',
+  '--terminal-scrollbar-thumb-hover': currentUiTheme.value['--terminal-scrollbar-thumb-hover'] || 'rgba(203, 213, 225, 0.72)',
+}));
  
 const isTerminalDomReady = ref(false); 
  
@@ -72,7 +81,6 @@ const sessionStore = useSessionStore(); // +++ 实例化会话 store +++
 const {
   autoCopyOnSelectBoolean,
   terminalScrollbackLimitNumber, 
-  terminalEnableRightClickPasteBoolean, 
 } = storeToRefs(settingsStore); 
 
 // 防抖函数
@@ -162,33 +170,6 @@ const getScrollbackValue = (limit: number): number => {
   }
   return Math.max(0, limit); // Ensure non-negative, return the number otherwise
 };
-
-// --- 右键粘贴功能 ---
-const handleContextMenuPaste = async (event: MouseEvent) => {
-  event.preventDefault(); // 阻止默认右键菜单
-  try {
-    const text = await navigator.clipboard.readText();
-    if (text && terminal) {
-      const processedText = text.replace(/\r\n?/g, '\n');
-      emitWorkspaceEvent('terminal:input', { sessionId: props.sessionId, data: processedText });
-    }
-  } catch (err) {
-    console.error('[Terminal] Failed to paste via Right Click:', err);
-  }
-};
-
-const addContextMenuListener = () => {
-  if (terminalRef.value) {
-    terminalRef.value.addEventListener('contextmenu', handleContextMenuPaste);
-  }
-};
-
-const removeContextMenuListener = () => {
-  if (terminalRef.value) {
-    terminalRef.value.removeEventListener('contextmenu', handleContextMenuPaste);
-  }
-};
-
 
 // --- 移动端模式下通过双指放大缩小终端字号 ---
 const getDistanceBetweenTouches = (touches: TouchList): number => {
@@ -516,22 +497,6 @@ onMounted(() => {
             }
         });
     }
-
-    // 根据初始设置添加监听器
-    if (terminalEnableRightClickPasteBoolean.value) {
-      addContextMenuListener();
-    }
-
-    // 监听设置变化
-    watch(terminalEnableRightClickPasteBoolean, (newValue) => {
-      if (newValue) {
-        addContextMenuListener();
-      } else {
-        removeContextMenuListener();
-      }
-    });
-
-
     // 重新添加鼠标滚轮缩放功能到内部容器 terminalRef
     if (terminalRef.value) {
       terminalRef.value.addEventListener('wheel', (event: WheelEvent) => {
@@ -601,10 +566,6 @@ onBeforeUnmount(() => {
   if (selectionListenerDisposable) {
       selectionListenerDisposable.dispose();
   }
-
-  
-    // 确保在卸载时移除右键监听器
-    removeContextMenuListener();
 
     // Remove touch listeners on unmount
     if (isMobile.value && terminalRef.value) {
@@ -718,7 +679,7 @@ watchEffect(() => {
 </script>
 
 <template>
-  <div ref="terminalOuterWrapperRef" class="terminal-outer-wrapper">
+  <div ref="terminalOuterWrapperRef" class="terminal-outer-wrapper" :style="terminalWrapperStyle">
     <!-- xterm 实际挂载点 -->
     <div ref="terminalRef" class="terminal-inner-container"></div>
   </div>
@@ -730,6 +691,8 @@ watchEffect(() => {
   height: 100%;
   overflow: hidden;
   position: relative;
+  border-radius: 24px;
+  background: var(--terminal-shell-bg);
 }
 
 .terminal-inner-container {
@@ -758,9 +721,36 @@ watchEffect(() => {
   text-shadow: var(--terminal-shadow);
 }
 
-/*
-  移除以下样式，因为它依赖于本组件内部管理的 .has-terminal-background 类，
-  该逻辑已移至 LayoutRenderer.vue
-*/
-</style>
+.terminal-inner-container :deep(.xterm),
+.terminal-inner-container :deep(.xterm-screen),
+.terminal-inner-container :deep(.xterm-viewport),
+.terminal-inner-container :deep(.xterm-scroll-area) {
+  border-radius: inherit;
+}
 
+.terminal-inner-container :deep(.xterm-viewport) {
+  background: transparent !important;
+  scrollbar-color: var(--terminal-scrollbar-thumb) var(--terminal-scrollbar-track);
+}
+
+.terminal-inner-container :deep(.xterm-viewport)::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.terminal-inner-container :deep(.xterm-viewport)::-webkit-scrollbar-track {
+  background: var(--terminal-scrollbar-track);
+  border-radius: 999px;
+}
+
+.terminal-inner-container :deep(.xterm-viewport)::-webkit-scrollbar-thumb {
+  background-color: var(--terminal-scrollbar-thumb);
+  border-radius: 999px;
+  border: 2px solid var(--terminal-scrollbar-track);
+}
+
+.terminal-inner-container :deep(.xterm-viewport)::-webkit-scrollbar-thumb:hover {
+  background-color: var(--terminal-scrollbar-thumb-hover);
+}
+
+</style>

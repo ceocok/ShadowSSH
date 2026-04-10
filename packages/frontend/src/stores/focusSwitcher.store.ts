@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, computed, nextTick } from 'vue';
+import { ref, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 // 假设有一个 API 客户端或辅助函数，这里我们直接使用 fetch
 // import apiClient from '@/services/api';
@@ -69,96 +69,14 @@ export const useFocusSwitcherStore = defineStore('focusSwitcher', () => {
 
   // +++ 修改：从后端加载配置（包括快捷键） +++
   async function loadConfigurationFromBackend() {
-    const apiUrl = '/api/v1/settings/focus-switcher-sequence'; // 假设 API 端点不变，但返回结构改变
-    // console.log(`[FocusSwitcherStore] Attempting to load full configuration (sequence & shortcuts) from backend via: ${apiUrl}`);
-    try {
-      const response = await fetch(apiUrl);
-      // console.log(`[FocusSwitcherStore] Received response from ${apiUrl}. Status: ${response.status}`);
-
-      if (!response.ok) {
-        console.error(`[FocusSwitcherStore] HTTP error from ${apiUrl}. Status: ${response.status}`);
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      // *** 假设后端返回 FocusSwitcherFullConfig 结构 ***
-      const loadedFullConfig: FocusSwitcherFullConfig = await response.json();
-      // console.log(`[FocusSwitcherStore] Raw JSON received from backend:`, JSON.stringify(loadedFullConfig));
-
-      // --- 验证和设置 ---
-      const availableIds = new Set(availableInputs.value.map(input => input.id));
-
-      // 验证 sequence
-      if (Array.isArray(loadedFullConfig?.sequence) && loadedFullConfig.sequence.every(id => typeof id === 'string' && availableIds.has(id))) {
-        sequenceOrder.value = loadedFullConfig.sequence;
-        // console.log('[FocusSwitcherStore] Successfully loaded and set sequenceOrder:', JSON.stringify(sequenceOrder.value));
-      } else {
-        console.warn('[FocusSwitcherStore] Invalid or missing sequence in loaded config. Resetting to empty array.');
-        sequenceOrder.value = [];
-      }
-
-      // 验证 shortcuts (itemConfigs)
-      if (typeof loadedFullConfig?.shortcuts === 'object' && loadedFullConfig.shortcuts !== null) {
-        const validConfigs: Record<string, FocusItemConfig> = {};
-        for (const id in loadedFullConfig.shortcuts) {
-          if (availableIds.has(id)) { // 只保留有效的 ID
-            const config = loadedFullConfig.shortcuts[id];
-            if (typeof config === 'object' && config !== null && (config.shortcut === undefined || (typeof config.shortcut === 'string' && config.shortcut.startsWith('Alt+')))) {
-              validConfigs[id] = { shortcut: config.shortcut }; // 只保留 shortcut
-            } else {
-               console.warn(`[FocusSwitcherStore] Invalid shortcut config for ID ${id}. Ignoring shortcut.`);
-               validConfigs[id] = {}; // 保留 ID 但清空无效快捷键
-            }
-          } else {
-             console.warn(`[FocusSwitcherStore] Ignoring shortcut config for unknown ID: ${id}`);
-          }
-        }
-        itemConfigs.value = validConfigs;
-        // console.log('[FocusSwitcherStore] Successfully loaded and set itemConfigs:', JSON.stringify(itemConfigs.value));
-      } else {
-        console.warn('[FocusSwitcherStore] Invalid or missing shortcuts in loaded config. Resetting to empty object.');
-        itemConfigs.value = {};
-      }
-
-    } catch (error) {
-      console.error(`[FocusSwitcherStore] Failed to load or parse configuration from backend (${apiUrl}):`, error);
-      sequenceOrder.value = [];
-      itemConfigs.value = {};
-      // console.log('[FocusSwitcherStore] Reset sequenceOrder and itemConfigs due to loading error.');
-    }
+    const availableIds = new Set(availableInputs.value.map(input => input.id));
+    const defaultSequence = ['commandInput', 'terminalSearch', 'fileManagerSearch', 'fileManagerPathInput'];
+    sequenceOrder.value = defaultSequence.filter(id => availableIds.has(id));
+    itemConfigs.value = {};
   }
 
   async function saveConfigurationToBackend() {
-    const apiUrl = '/api/v1/settings/focus-switcher-sequence'; // 假设 API 端点不变，但接受结构改变
-    // console.log(`[FocusSwitcherStore] Attempting to save full configuration (sequence & shortcuts) to backend via PUT: ${apiUrl}`);
-    try {
-      // *** 构造 FocusSwitcherFullConfig 结构发送给后端 ***
-      const configToSave: FocusSwitcherFullConfig = {
-        sequence: sequenceOrder.value,
-        shortcuts: itemConfigs.value,
-      };
-      // console.log('[FocusSwitcherStore] Full configuration data to save:', JSON.stringify(configToSave));
-      const response = await fetch(apiUrl, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          // Auth headers if needed
-        },
-        body: JSON.stringify(configToSave), // *** 发送包含 sequence 和 shortcuts 的对象 ***
-      });
-      // console.log(`[FocusSwitcherStore] Received response from PUT ${apiUrl}. Status: ${response.status}`);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error(`[FocusSwitcherStore] Save failed. Status: ${response.status}, Error data:`, errorData);
-        throw new Error(`HTTP error! status: ${response.status}, message: ${errorData.message || 'Unknown error'}`);
-      }
-
-      const result = await response.json();
-      // console.log('[FocusSwitcherStore] Configuration successfully saved to backend. Response message:', result.message);
-    } catch (error) {
-      console.error(`[FocusSwitcherStore] Failed to save configuration to backend (${apiUrl}):`, error);
-      // Notify user of failure
-    }
+    return;
   }
 
 
@@ -393,10 +311,7 @@ export const useFocusSwitcherStore = defineStore('focusSwitcher', () => {
   // --- Initialization ---
   // Store 创建时自动从后端加载配置
   // console.log('[FocusSwitcherStore] Initializing store and scheduling loadConfigurationFromBackend...'); // 使用新名称
-  nextTick(() => {
-    // console.log('[FocusSwitcherStore] nextTick triggered, calling loadConfigurationFromBackend.'); // 使用新名称
-    loadConfigurationFromBackend(); // 调用重命名后的加载函数
-  });
+  void loadConfigurationFromBackend();
 
   return {
     // State

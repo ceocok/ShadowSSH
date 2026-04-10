@@ -1,6 +1,5 @@
 import * as ConnectionRepository from './connection.repository';
 import { encrypt, decrypt } from '../utils/crypto';
-import { AuditLogService } from '../audit/audit.service';
 import * as SshKeyService from '../ssh_keys/ssh_key.service'; 
 import {
     ConnectionBase,
@@ -12,6 +11,17 @@ import {
 } from '../types/connection.types';
 
 export type { ConnectionBase, ConnectionWithTags, CreateConnectionInput, UpdateConnectionInput };
+
+const normalizeConnectionHost = (value: string | null | undefined): string => {
+    if (!value) {
+        return '';
+    }
+    const normalized = value.trim();
+    if (normalized.startsWith('[') && normalized.endsWith(']')) {
+        return normalized.slice(1, -1).trim();
+    }
+    return normalized;
+};
 
 /**
  * 辅助函数：验证 jump_chain 并处理与 proxy_id 的互斥关系
@@ -52,8 +62,6 @@ const _validateAndProcessJumpChain = async (
 };
 
 
-const auditLogService = new AuditLogService(); 
-
 /**
  * 获取所有连接（包含标签）
  */
@@ -87,45 +95,25 @@ export const createConnection = async (input: CreateConnectionInput): Promise<Co
 
     // 1. 验证输入 (包含 type)
     // Convert type to uppercase for validation and consistency
-    const connectionType = input.type?.toUpperCase() as 'SSH' | 'RDP' | 'VNC' | undefined; // Ensure type safety
-    if (!connectionType || !['SSH', 'RDP', 'VNC'].includes(connectionType)) {
-        throw new Error('必须提供有效的连接类型 (SSH, RDP 或 VNC)。');
+    const connectionType = input.type?.toUpperCase() as 'SSH' | undefined; // Ensure type safety
+    if (connectionType !== 'SSH') {
+        throw new Error('必须提供有效的连接类型 (SSH)。');
     }
-    if (!input.host || !input.username) {
+    const normalizedHost = normalizeConnectionHost(input.host);
+    if (!normalizedHost || !input.username) {
         throw new Error('缺少必要的连接信息 (host, username)。');
     }
-    // Type-specific validation using the uppercase version
-    if (connectionType === 'SSH') {
-        if (!input.auth_method || !['password', 'key'].includes(input.auth_method)) {
-             throw new Error('SSH 连接必须提供有效的认证方式 (password 或 key)。');
-        }
-        if (input.auth_method === 'password' && !input.password) {
-            throw new Error('SSH 密码认证方式需要提供 password。');
-        }
-        // If using ssh_key_id, private_key is not required in the input
-        if (input.auth_method === 'key' && !input.ssh_key_id && !input.private_key) {
-            throw new Error('SSH 密钥认证方式需要提供 private_key 或选择一个已保存的密钥 (ssh_key_id)。');
-        }
-        if (input.auth_method === 'key' && input.ssh_key_id && input.private_key) {
-            throw new Error('不能同时提供 private_key 和 ssh_key_id。');
-        }
-    } else if (connectionType === 'RDP') {
-        if (!input.password) {
-             throw new Error('RDP 连接需要提供 password。');
-        }
-        // For RDP, we'll ignore auth_method, private_key, passphrase from input if provided
-    } else if (connectionType === 'VNC') {
-        if (!input.password) {
-            throw new Error('VNC 连接需要提供 password。');
-        }
-        // For VNC, auth_method is implicitly 'password'.
-        // ssh_key_id, private_key, passphrase are not applicable.
-        if (input.auth_method && input.auth_method !== 'password') {
-            throw new Error('VNC 连接的认证方式必须是 password。');
-        }
-        if (input.ssh_key_id || input.private_key) {
-            throw new Error('VNC 连接不支持 SSH 密钥认证。');
-        }
+    if (!input.auth_method || !['password', 'key'].includes(input.auth_method)) {
+         throw new Error('SSH 连接必须提供有效的认证方式 (password 或 key)。');
+    }
+    if (input.auth_method === 'password' && !input.password) {
+        throw new Error('SSH 密码认证方式需要提供 password。');
+    }
+    if (input.auth_method === 'key' && !input.ssh_key_id && !input.private_key) {
+        throw new Error('SSH 密钥认证方式需要提供 private_key 或选择一个已保存的密钥 (ssh_key_id)。');
+    }
+    if (input.auth_method === 'key' && input.ssh_key_id && input.private_key) {
+        throw new Error('不能同时提供 private_key 和 ssh_key_id。');
     }
 
     // 2. 处理凭证和 ssh_key_id (根据 type)
@@ -136,66 +124,43 @@ export const createConnection = async (input: CreateConnectionInput): Promise<Co
     // Default to 'password' for DB compatibility, especially for RDP
     let authMethodForDb: 'password' | 'key' = 'password';
 
-    if (connectionType === 'SSH') {
-        authMethodForDb = input.auth_method!; // Already validated above
-        if (input.auth_method === 'password') {
-            encryptedPassword = encrypt(input.password!);
-            sshKeyIdToSave = null; // Password auth cannot use ssh_key_id
-        } else { // auth_method is 'key'
-            if (input.ssh_key_id) {
-                // Validate the provided ssh_key_id
-                const keyExists = await SshKeyService.getSshKeyDbRowById(input.ssh_key_id);
-                if (!keyExists) {
-                    throw new Error(`提供的 SSH 密钥 ID ${input.ssh_key_id} 无效或不存在。`);
-                }
-                sshKeyIdToSave = input.ssh_key_id;
-                // When using ssh_key_id, connection's own key fields should be null
-                encryptedPrivateKey = null;
-                encryptedPassphrase = null;
-            } else if (input.private_key) {
-                // Encrypt the provided private key and passphrase
-                encryptedPrivateKey = encrypt(input.private_key!);
-                if (input.passphrase) {
-                    encryptedPassphrase = encrypt(input.passphrase);
-                }
-                sshKeyIdToSave = null; // Ensure ssh_key_id is null if providing key directly
-            } else {
-                 // This case should be caught by validation above, but as a safeguard:
-                 throw new Error('SSH 密钥认证方式内部错误：未提供 private_key 或 ssh_key_id。');
+    authMethodForDb = input.auth_method!; // Already validated above
+    if (input.auth_method === 'password') {
+        encryptedPassword = encrypt(input.password!);
+        sshKeyIdToSave = null; // Password auth cannot use ssh_key_id
+    } else { // auth_method is 'key'
+        if (input.ssh_key_id) {
+            const keyExists = await SshKeyService.getSshKeyDbRowById(input.ssh_key_id);
+            if (!keyExists) {
+                throw new Error(`提供的 SSH 密钥 ID ${input.ssh_key_id} 无效或不存在。`);
             }
+            sshKeyIdToSave = input.ssh_key_id;
+            encryptedPrivateKey = null;
+            encryptedPassphrase = null;
+        } else if (input.private_key) {
+            encryptedPrivateKey = encrypt(input.private_key!);
+            if (input.passphrase) {
+                encryptedPassphrase = encrypt(input.passphrase);
+            }
+            sshKeyIdToSave = null;
+        } else {
+             throw new Error('SSH 密钥认证方式内部错误：未提供 private_key 或 ssh_key_id。');
         }
-    } else if (connectionType === 'RDP') { // RDP
-        encryptedPassword = encrypt(input.password!);
-        // authMethodForDb remains 'password' for RDP
-        encryptedPrivateKey = null;
-        encryptedPassphrase = null;
-        sshKeyIdToSave = null;
-    } else { // VNC
-        encryptedPassword = encrypt(input.password!);
-        authMethodForDb = 'password'; // VNC always uses password auth
-        encryptedPrivateKey = null;
-        encryptedPassphrase = null;
-        sshKeyIdToSave = null;
     }
 
     // 3. 准备仓库数据
-    let defaultPort = 22; // Default for SSH
-    if (connectionType === 'RDP') {
-        defaultPort = 3389;
-    } else if (connectionType === 'VNC') {
-        defaultPort = 5900; // Default VNC port
-    }
+    const defaultPort = 22;
     // +++ Explicitly type connectionData using the local alias +++
     const connectionData: ConnectionDataForRepo = {
         name: input.name || '',
         type: connectionType,
-        host: input.host,
+        host: normalizedHost,
         port: input.port ?? defaultPort, // Use type-specific default port
         username: input.username,
         auth_method: authMethodForDb, // Use determined auth method
         encrypted_password: encryptedPassword,
-        encrypted_private_key: encryptedPrivateKey, // Null if using ssh_key_id or RDP
-        encrypted_passphrase: encryptedPassphrase, // Null if using ssh_key_id or RDP
+        encrypted_private_key: encryptedPrivateKey,
+        encrypted_passphrase: encryptedPassphrase,
         ssh_key_id: sshKeyIdToSave, // +++ Add ssh_key_id +++
 notes: input.notes ?? null, // Add notes field
         proxy_id: input.proxy_id ?? null, // 直接使用输入的 proxy_id
@@ -225,8 +190,7 @@ notes: input.notes ?? null, // Add notes field
         // 如果创建成功，这理论上不应该发生
         console.error(`[Audit Log Error] Failed to retrieve connection ${newConnectionId} after creation.`);
         throw new Error('创建连接后无法检索到该连接。');
-    }
-    auditLogService.logAction('CONNECTION_CREATED', { connectionId: newConnection.id, type: newConnection.type, name: newConnection.name, host: newConnection.host }); // Add type to audit log
+    } // Add type to audit log
 
     // 7. 返回新创建的带标签的连接
     return newConnection;
@@ -247,7 +211,7 @@ export const updateConnection = async (id: number, input: UpdateConnectionInput)
     const dataToUpdate: Partial<Omit<ConnectionRepository.FullConnectionData & { ssh_key_id?: number | null; jump_chain?: number[] | null; proxy_type?: 'proxy' | 'jump' | null }, 'id' | 'created_at' | 'last_connected_at' | 'tag_ids'>> = {};
     let needsCredentialUpdate = false;
     // Determine the final type, converting input type to uppercase if provided
-    const targetType = input.type?.toUpperCase() as 'SSH' | 'RDP' | 'VNC' | undefined || currentFullConnection.type;
+    const targetType = input.type?.toUpperCase() as 'SSH' | undefined || currentFullConnection.type;
 
     // 处理 jump_chain 和 proxy_id
     if (input.jump_chain !== undefined || input.proxy_id !== undefined) {
@@ -277,7 +241,7 @@ export const updateConnection = async (id: number, input: UpdateConnectionInput)
     if (input.name !== undefined) dataToUpdate.name = input.name || '';
     // Update type if changed, using the uppercase version
     if (input.type !== undefined && targetType !== currentFullConnection.type) dataToUpdate.type = targetType;
-    if (input.host !== undefined) dataToUpdate.host = input.host;
+    if (input.host !== undefined) dataToUpdate.host = normalizeConnectionHost(input.host);
     if (input.port !== undefined) dataToUpdate.port = input.port;
     if (input.username !== undefined) dataToUpdate.username = input.username;
     if (input.notes !== undefined) dataToUpdate.notes = input.notes; // Add notes update
@@ -375,32 +339,6 @@ export const updateConnection = async (id: number, input: UpdateConnectionInput)
                 dataToUpdate.encrypted_password = null;
             }
         }
-    } else if (targetType === 'RDP') { // targetType is 'RDP'
-        // RDP only uses password
-        if (input.password !== undefined) { // Check if password was provided
-             dataToUpdate.encrypted_password = input.password ? encrypt(input.password) : null;
-             needsCredentialUpdate = true;
-        }
-        // Ensure SSH specific fields are nullified if switching to RDP or updating RDP
-        if (targetType !== currentFullConnection.type || needsCredentialUpdate || Object.keys(dataToUpdate).includes('type')) {
-            dataToUpdate.auth_method = 'password'; // RDP uses password auth method in DB
-            dataToUpdate.encrypted_private_key = null;
-            dataToUpdate.encrypted_passphrase = null;
-            dataToUpdate.ssh_key_id = null; // RDP cannot use ssh_key_id
-        }
-    } else { // targetType is 'VNC'
-        // VNC only uses password
-        if (input.password !== undefined) { // Check if password was provided
-            dataToUpdate.encrypted_password = input.password ? encrypt(input.password) : null;
-            needsCredentialUpdate = true;
-        }
-        // Ensure SSH specific fields are nullified if switching to VNC or updating VNC
-        if (targetType !== currentFullConnection.type || needsCredentialUpdate || Object.keys(dataToUpdate).includes('type')) {
-            dataToUpdate.auth_method = 'password'; // VNC uses password auth method in DB
-            dataToUpdate.encrypted_private_key = null;
-            dataToUpdate.encrypted_passphrase = null;
-            dataToUpdate.ssh_key_id = null; // VNC cannot use ssh_key_id
-        }
     }
 
     // 3. 如果有更改，则更新连接记录
@@ -434,7 +372,6 @@ export const updateConnection = async (id: number, input: UpdateConnectionInput)
          if (dataToUpdate.type) {
              auditDetails.newType = dataToUpdate.type;
          }
-         auditLogService.logAction('CONNECTION_UPDATED', auditDetails);
     }
 
     // 6. 获取并返回更新后的连接
@@ -447,10 +384,6 @@ export const updateConnection = async (id: number, input: UpdateConnectionInput)
  */
 export const deleteConnection = async (id: number): Promise<boolean> => {
     const deleted = await ConnectionRepository.deleteConnection(id);
-    if (deleted) {
-        // 删除成功后记录审计操作
-        auditLogService.logAction('CONNECTION_DELETED', { connectionId: id });
-    }
     return deleted;
 };
 
@@ -602,14 +535,6 @@ export const cloneConnection = async (originalId: number, newName: string): Prom
         throw new Error('克隆连接后无法检索到该连接。');
     }
     // 使用 CONNECTION_CREATED 事件，但添加额外信息表明是克隆操作
-    auditLogService.logAction('CONNECTION_CREATED', {
-        connectionId: clonedConnection.id,
-        type: clonedConnection.type,
-        name: clonedConnection.name,
-        host: clonedConnection.host,
-        clonedFromId: originalId // 添加克隆来源信息
-    });
-
     // 7. 返回新创建的带标签的连接
     return clonedConnection;
 };
@@ -635,7 +560,7 @@ export const addTagToConnections = async (connectionIds: number[], tagId: number
 
         // 记录审计日志 (可以考虑为批量操作定义新的审计类型)
         // TODO: 定义 'CONNECTIONS_TAG_ADDED' 审计日志类型
-        // auditLogService.logAction('CONNECTIONS_TAG_ADDED', { connectionIds, tagId });
+        //
 
     } catch (error: any) {
         console.error(`Service: 为连接 ${connectionIds.join(', ')} 添加标签 ${tagId} 时发生错误:`, error);

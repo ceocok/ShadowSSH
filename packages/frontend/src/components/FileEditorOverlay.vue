@@ -2,7 +2,6 @@
 import { computed, ref, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'; // + nextTick
 import { useI18n } from 'vue-i18n';
 import { storeToRefs } from 'pinia';
-import MonacoEditor from './MonacoEditor.vue';
 import CodeMirrorMobileEditor from './CodeMirrorMobileEditor.vue'; // +++ Import new mobile editor
 import FileEditorTabs from './FileEditorTabs.vue';
 import { useFileEditorStore, type FileTab } from '../stores/fileEditor.store';
@@ -94,7 +93,7 @@ const startHeightPx = ref(0);
 const minWidth = 400; // 最小宽度
 const minHeight = 300; // 最小高度
 const encodingSelectRef = ref<HTMLSelectElement | null>(null); // +++ Ref for the select element +++
-const codeMirrorMobileEditorRef = ref<InstanceType<typeof CodeMirrorMobileEditor> | null>(null); // +++ Ref for CodeMirrorMobileEditor +++
+const codeMirrorEditorRef = ref<InstanceType<typeof CodeMirrorMobileEditor> | null>(null);
 
 // --- 计算属性，用于模板绑定 ---
 const popupStyle = computed(() => {
@@ -399,35 +398,10 @@ const handleEncodingChange = (event: Event) => {
   }
 };
 
-// +++ 处理编辑器滚动事件 +++
-const handleEditorScroll = ({ scrollTop, scrollLeft }: { scrollTop: number; scrollLeft: number }) => {
-    const currentActiveTab = activeTab.value;
-    if (!currentActiveTab) return;
-
-    if (shareFileEditorTabsBoolean.value) {
-        // 全局 Store
-        updateTabScrollPosition(currentActiveTab.id, scrollTop, scrollLeft);
-    } else {
-        // 非共享模式需要 sessionId
-        const sessionId = popupFileInfo.value?.sessionId;
-        if (sessionId) {
-            // 会话 Store
-            updateTabScrollPositionInSession(sessionId, currentActiveTab.id, scrollTop, scrollLeft);
-        } else {
-            console.error("[FileEditorOverlay] 无法更新滚动位置：非共享模式下缺少 sessionId。");
-        }
-    }
-};
-
-// +++ 处理编辑器字体大小更新事件 +++
-const handleEditorFontSizeUpdate = (newSize: number) => {
-    appearanceStore.setEditorFontSize(newSize);
-};
-
 // +++ 打开搜索面板 +++
 const handleOpenSearch = () => {
-  if (codeMirrorMobileEditorRef.value) {
-    codeMirrorMobileEditorRef.value.openSearch();
+  if (codeMirrorEditorRef.value) {
+    codeMirrorEditorRef.value.openSearch();
   }
 };
  
@@ -573,31 +547,17 @@ onBeforeUnmount(() => {
         <div v-if="currentTabIsLoading" class="editor-loading">{{ t('fileManager.loadingFile') }}</div>
         <div v-else-if="currentTabLoadingError" class="editor-error">{{ currentTabLoadingError }}</div>
         
-        <!-- Desktop Editor -->
-        <MonacoEditor
-          v-else-if="activeTab && !props.isMobile"
-          :key="`monaco-${activeTab.id}`"
-          v-model="activeEditorContent"
-          :language="currentTabLanguage"
-          :font-family="currentEditorFontFamily"
-          theme="vs-dark"
-          class="editor-instance"
-          :font-size="currentEditorFontSize"
-          @request-save="handleSaveRequest"
-          @update:fontSize="handleEditorFontSizeUpdate"
-          :initialScrollTop="activeTab?.scrollTop ?? 0"
-          :initialScrollLeft="activeTab?.scrollLeft ?? 0"
-          @update:scrollPosition="handleEditorScroll"
-        />
-        <!-- Mobile Editor -->
         <CodeMirrorMobileEditor
-          v-else-if="activeTab && props.isMobile"
+          v-else-if="activeTab"
           :key="`cm-${activeTab.id}`"
           v-model="activeEditorContent"
           :language="currentTabLanguage"
+          :font-family="currentEditorFontFamily"
+          :font-size="props.isMobile ? undefined : currentEditorFontSize"
+          :enable-pinch-zoom="!!props.isMobile"
           class="editor-instance"
           @request-save="handleSaveRequest"
-          ref="codeMirrorMobileEditorRef"
+          ref="codeMirrorEditorRef"
         />
          <!-- 如果容器可见但没有活动标签页 -->
         <div v-else class="editor-placeholder">{{ t('fileManager.selectFileToEdit') }}</div>

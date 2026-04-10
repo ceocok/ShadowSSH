@@ -5,11 +5,10 @@ import App from './App.vue';
 import router from './router'; 
 import i18n from './i18n';
 import { useAuthStore } from './stores/auth.store'; 
+import { useAppearanceStore } from './stores/appearance.store';
 import { useSettingsStore } from './stores/settings.store'; 
-import { useAppearanceStore } from './stores/appearance.store'; 
 import './style.css';
 import '@fortawesome/fontawesome-free/css/all.min.css';
-import 'splitpanes/dist/splitpanes.css';
 import ElementPlus from 'element-plus';
 import 'element-plus/dist/index.css';
 
@@ -29,11 +28,10 @@ app.use(i18n); // 使用 i18n
 // 使用 async IIFE 来允许顶层 await
 (async () => {
   const authStore = useAuthStore(pinia); // 实例化 Auth Store
-  // **提前实例化 AppearanceStore 以确保 immediate watcher 运行**
   const appearanceStore = useAppearanceStore(pinia);
-
   try {
     console.log("[main.ts] 开始检查设置和认证状态...");
+    await appearanceStore.loadInitialAppearanceData();
     // 1. 同时检查设置和认证状态，并等待它们完成
     // 确保 checkAuthStatus 可以在 needsSetup=true 时也能安全运行并返回正确状态
     await Promise.all([
@@ -47,13 +45,10 @@ app.use(i18n); // 使用 i18n
       console.log("[main.ts] 用户已认证且无需设置，加载设置和外观数据...");
       const settingsStore = useSettingsStore(pinia);
       try {
-        await Promise.all([
-          settingsStore.loadInitialSettings(),
-          appearanceStore.loadInitialAppearanceData() // 调用已实例化的 store 的 action
-        ]);
-        console.log("[main.ts] 用户设置和外观数据加载完成。");
+        await settingsStore.loadInitialSettings();
+        console.log("[main.ts] 用户设置加载完成。");
       } catch (error) {
-         console.error("[main.ts] 加载用户设置或外观数据失败:", error);
+         console.error("[main.ts] 加载用户设置失败:", error);
          // 加载失败也继续，可能使用默认值或显示错误
       }
     } else if (authStore.needsSetup) {
@@ -61,7 +56,6 @@ app.use(i18n); // 使用 i18n
         // 不再手动 router.push('/setup')
     } else {
         console.log("[main.ts] 用户未认证或无需设置。");
-        // appearanceStore 已实例化，其 immediate watcher 会应用默认主题
     }
 
     // 3. 状态和数据准备就绪后，再启用路由并挂载应用

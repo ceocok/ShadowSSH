@@ -7,7 +7,7 @@ import { getDbInstance, runDb, getDb as getDbRow, allDb } from '../database/conn
 interface ConnectionBase {
     id: number;
     name: string | null;
-    type: 'SSH' | 'RDP' | 'VNC';
+    type: 'SSH';
     host: string;
     port: number;
     username: string;

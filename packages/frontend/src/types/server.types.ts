@@ -14,6 +14,7 @@ export interface ServerStatus {
     netRxRate?: number; // Bytes/sec
     netTxRate?: number; // Bytes/sec
     netInterface?: string;
+    serverIp?: string;
     osName?: string;
 }
 

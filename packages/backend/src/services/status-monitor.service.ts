@@ -19,6 +19,7 @@ interface ServerStatus {
     netRxRate?: number; // Bytes per second
     netTxRate?: number; // Bytes per second
     netInterface?: string;
+    serverIp?: string;
     osName?: string;
     loadAvg?: number[]; // 系统平均负载 [1min, 5min, 15min]
     timestamp: number; // 状态获取时间戳
@@ -32,9 +33,71 @@ interface NetworkStats {
     }
 }
 
+interface InterfaceAddress {
+    iface: string | null;
+    ip: string;
+}
+
 
 // 用于存储上一次的网络统计信息以计算速率
 const previousNetStats = new Map<string, { rx: number, tx: number, timestamp: number }>();
+
+const warpInterfacePattern = /^(wgcf|warp|cloudflarewarp|utun|tun|tailscale|zt|zerotier)/i;
+
+const isPrivateOrSpecialIpv4 = (ip: string): boolean => {
+    if (ip === '127.0.0.1' || ip.startsWith('169.254.')) return true;
+    if (ip.startsWith('10.')) return true;
+    if (ip.startsWith('192.168.')) return true;
+
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some(Number.isNaN)) {
+        return false;
+    }
+
+    const [first, second] = parts;
+    if (first === 172 && second >= 16 && second <= 31) return true;
+    if (first === 100 && second >= 64 && second <= 127) return true;
+
+    return false;
+};
+
+const parseInterfaceAddresses = (output: string): InterfaceAddress[] => {
+    return output
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => {
+            const parts = line.split(/\s+/);
+            if (parts.length >= 2 && parts[1].includes('/')) {
+                return {
+                    iface: parts[0] || null,
+                    ip: parts[1].split('/')[0],
+                };
+            }
+
+            return {
+                iface: null,
+                ip: parts[0],
+            };
+        })
+        .filter(entry => /^\d{1,3}(?:\.\d{1,3}){3}$/.test(entry.ip));
+};
+
+const pickPreferredServerIp = (addresses: InterfaceAddress[]): string | null => {
+    if (!addresses.length) {
+        return null;
+    }
+
+    const nonWarpAddresses = addresses.filter(entry => !entry.iface || !warpInterfacePattern.test(entry.iface));
+    const preferredPool = nonWarpAddresses.length ? nonWarpAddresses : addresses;
+
+    const publicCandidate = preferredPool.find(entry => !isPrivateOrSpecialIpv4(entry.ip));
+    if (publicCandidate) {
+        return publicCandidate.ip;
+    }
+
+    return preferredPool[0]?.ip ?? null;
+};
 
 export class StatusMonitorService {
     private clientStates: Map<string, ClientState>; // 使用导入的 ClientState
@@ -73,6 +136,8 @@ export class StatusMonitorService {
          state.statusIntervalId = setInterval(() => {
              this.fetchAndSendServerStatus(sessionId);
          }, intervalMs); // --- 使用获取到的间隔 ---
+
+         void this.fetchAndSendServerStatus(sessionId);
     }
 
     /**
@@ -112,6 +177,10 @@ export class StatusMonitorService {
         }
     }
 
+    async requestStatusRefresh(sessionId: string): Promise<void> {
+        await this.fetchAndSendServerStatus(sessionId);
+    }
+
      /**
       * 通过 SSH 执行命令获取服务器状态信息
       * @param sshClient SSH 客户端实例
@@ -129,6 +198,17 @@ export class StatusMonitorService {
                  const osReleaseOutput = await this.executeSshCommand(sshClient, 'cat /etc/os-release');
                  const nameMatch = osReleaseOutput.match(/^PRETTY_NAME="?([^"]+)"?/m);
                  status.osName = nameMatch ? nameMatch[1] : (osReleaseOutput.match(/^NAME="?([^"]+)"?/m)?.[1] ?? 'Unknown');
+             } catch (err) { }
+
+             try {
+                 const ipOutput = await this.executeSshCommand(
+                     sshClient,
+                     "(ip -o -4 addr show scope global 2>/dev/null | awk '{print $2, $4}') || (hostname -I 2>/dev/null | tr ' ' '\\n')"
+                 );
+                 const resolvedIp = pickPreferredServerIp(parseInterfaceAddresses(ipOutput));
+                 if (resolvedIp) {
+                     status.serverIp = resolvedIp;
+                 }
              } catch (err) { }
 
              try {

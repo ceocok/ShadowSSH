@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, defineEmits } from 'vue'; 
 
+defineProps<{
+  compact?: boolean;
+}>();
+
 const emit = defineEmits<{
   (e: 'send-key', keySequence: string): void;
 }>();
@@ -66,78 +70,105 @@ interface KeyDefinition {
   type: 'modifier' | 'control' | 'char' | 'navigation' | 'special'; // Key type
 }
 
-// +++ Updated key layout definition +++
-const keys: KeyDefinition[] = [
-  // Row 1: Modifiers and special controls
-  { label: 'Ctrl', type: 'modifier' },
-  { label: 'Alt', type: 'modifier' },
-  { label: 'Tab', sequence: '\t', type: 'control' },
-  { label: 'Esc', sequence: '\x1b', type: 'control' },
-  // Row 2: Navigation and common symbols
-  { label: '↑', sequence: '\x1b[A', type: 'navigation' },
-  { label: '↓', sequence: '\x1b[B', type: 'navigation' },
-  { label: '←', sequence: '\x1b[D', type: 'navigation' },
-  { label: '→', sequence: '\x1b[C', type: 'navigation' },
-  { label: 'Home', sequence: '\x1b[1~', type: 'navigation' }, // +++ Home +++
-  { label: 'End', sequence: '\x1b[4~', type: 'navigation' }, // +++ End +++
-  { label: 'PgUp', sequence: '\x1b[5~', type: 'navigation' }, // +++ PageUp +++
-  { label: 'PgDn', sequence: '\x1b[6~', type: 'navigation' }, // +++ PageDown +++
-  // Row 3: Function Keys (F1-F12)
-  { label: 'F1', sequence: '\x1b[11~', type: 'special' }, { label: 'F2', sequence: '\x1b[12~', type: 'special' },
-  { label: 'F3', sequence: '\x1b[13~', type: 'special' }, { label: 'F4', sequence: '\x1b[14~', type: 'special' },
-  { label: 'F5', sequence: '\x1b[15~', type: 'special' }, { label: 'F6', sequence: '\x1b[17~', type: 'special' },
-  { label: 'F7', sequence: '\x1b[18~', type: 'special' }, { label: 'F8', sequence: '\x1b[19~', type: 'special' },
-  { label: 'F9', sequence: '\x1b[20~', type: 'special' }, { label: 'F10', sequence: '\x1b[21~', type: 'special' },
-  { label: 'F11', sequence: '\x1b[23~', type: 'special' }, { label: 'F12', sequence: '\x1b[24~', type: 'special' },
-  // Row 4: Alphabet Keys (A-Z)
-  { label: 'A', type: 'char' }, { label: 'B', type: 'char' }, { label: 'C', type: 'char' },
-  { label: 'D', type: 'char' }, { label: 'E', type: 'char' }, { label: 'F', type: 'char' },
-  { label: 'G', type: 'char' }, { label: 'H', type: 'char' }, { label: 'I', type: 'char' },
-  { label: 'J', type: 'char' }, { label: 'K', type: 'char' }, { label: 'L', type: 'char' },
-  { label: 'M', type: 'char' }, { label: 'N', type: 'char' }, { label: 'O', type: 'char' },
-  { label: 'P', type: 'char' }, { label: 'Q', type: 'char' }, { label: 'R', type: 'char' },
-  { label: 'S', type: 'char' }, { label: 'T', type: 'char' }, { label: 'U', type: 'char' },
-  { label: 'V', type: 'char' }, { label: 'W', type: 'char' }, { label: 'X', type: 'char' },
-  { label: 'Y', type: 'char' }, { label: 'Z', type: 'char' },
-  // Add numbers or other symbols if needed
+// 精简为移动端 SSH 常用补充键盘：
+// 保留修饰键、方向键、Tab/Esc，以及少量高频控制组合字母。
+const keyRows: KeyDefinition[][] = [
+  [
+    { label: 'Ctrl', type: 'modifier' },
+    { label: 'C', type: 'char' },
+    { label: '⌫', sequence: '\x7f', type: 'control' },
+    { label: 'Alt', type: 'modifier' },
+    { label: 'Tab', sequence: '\t', type: 'control' },
+    { label: 'Esc', sequence: '\x1b', type: 'control' },
+    { label: '↑', sequence: '\x1b[A', type: 'navigation' },
+    { label: '↓', sequence: '\x1b[B', type: 'navigation' },
+  ],
+  [
+    { label: '←', sequence: '\x1b[D', type: 'navigation' },
+    { label: '→', sequence: '\x1b[C', type: 'navigation' },
+    { label: 'A', type: 'char' },
+    { label: 'D', type: 'char' },
+    { label: 'L', type: 'char' },
+    { label: 'R', type: 'char' },
+    { label: 'U', type: 'char' },
+    { label: 'W', type: 'char' },
+    { label: 'Z', type: 'char' },
+  ],
 ];
 </script>
 
 <template>
-  <!-- +++ Updated template loop and bindings +++ -->
-  <div class="virtual-keyboard-bar flex flex-wrap items-center justify-center gap-1 p-1 bg-background border-t border-border">
-    <button
-      v-for="keyDef in keys"
-      :key="keyDef.label"
-      @click="sendKey(keyDef)"
-      class="px-3 py-1.5 rounded border border-border bg-input text-foreground text-xs hover:bg-border focus:outline-none focus:ring-1 focus:ring-primary transition-colors duration-150"
-      :class="{
-        'bg-primary text-primary-foreground hover:bg-primary/90': // Style for active modifiers
-          (keyDef.label === 'Ctrl' && isCtrlActive) ||
-          (keyDef.label === 'Alt' && isAltActive)
-      }"
-      :title="keyDef.label"
-    >
-      {{ keyDef.label }}
-    </button>
+  <div
+    class="virtual-keyboard-bar"
+    :class="{ 'is-compact': compact }"
+    @pointerdown.prevent
+    @mousedown.prevent
+  >
+    <div v-for="(row, rowIndex) in keyRows" :key="rowIndex" class="virtual-keyboard-row">
+      <button
+        v-for="keyDef in row"
+        :key="keyDef.label"
+        @pointerdown.prevent.stop="sendKey(keyDef)"
+        @mousedown.prevent.stop
+        class="virtual-keyboard-key"
+        :class="{
+          'is-active':
+            (keyDef.label === 'Ctrl' && isCtrlActive) ||
+            (keyDef.label === 'Alt' && isAltActive)
+        }"
+        :title="keyDef.label"
+      >
+        {{ keyDef.label }}
+      </button>
+    </div>
   </div>
 </template>
 
 <style scoped>
 .virtual-keyboard-bar {
-  /* Base styles */
-  flex-wrap: wrap; /* Allow wrapping */
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  padding: 8px 10px;
+  background: color-mix(in srgb, var(--surface-card-bg) 92%, transparent);
+  border-top: 1px solid var(--surface-card-border);
+  backdrop-filter: blur(20px);
+  overflow: hidden;
 }
 
-button {
-  min-width: 40px; /* Ensure tappable area */
+.virtual-keyboard-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.virtual-keyboard-key {
+  min-width: 34px;
+  padding: 6px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--surface-input-border);
+  background: var(--surface-input-bg);
+  color: var(--text-color);
+  font-size: 12px;
   text-align: center;
+  flex: 0 0 auto;
 }
 
-/* Optional: Add specific styles for modifier keys */
-/*
-button[title="Ctrl"], button[title="Alt"] {
-  font-weight: bold;
+.virtual-keyboard-bar.is-compact {
+  border-top: 0;
 }
-*/
+
+.virtual-keyboard-bar.is-compact .virtual-keyboard-key {
+  min-width: 32px;
+  padding: 5px 8px;
+  font-size: 11px;
+}
+
+.virtual-keyboard-key.is-active {
+  background: var(--button-primary-gradient);
+  color: #fff;
+  border-color: transparent;
+}
 </style>

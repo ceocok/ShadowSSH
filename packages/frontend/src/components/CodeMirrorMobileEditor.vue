@@ -22,6 +22,18 @@ const props = defineProps({
     type: String,
     default: 'plaintext', 
   },
+  fontSize: {
+    type: Number,
+    default: null,
+  },
+  fontFamily: {
+    type: String,
+    default: '',
+  },
+  enablePinchZoom: {
+    type: Boolean,
+    default: true,
+  },
 });
 
 const emit = defineEmits(['update:modelValue', 'request-save']);
@@ -30,14 +42,14 @@ const appearanceStore = useAppearanceStore();
 const editorRef = ref<HTMLDivElement | null>(null);
 const view = shallowRef<EditorView | null>(null);
 const languageCompartment = new Compartment();
-const currentFontSize = ref(appearanceStore.currentMobileEditorFontSize);
+const currentFontSize = ref(props.fontSize || appearanceStore.currentMobileEditorFontSize);
 const MIN_FONT_SIZE = 8;
 const MAX_FONT_SIZE = 40;
 let lastPinchDistance = 0;
 const debounceTimeout = ref<number | null>(null);
 const DEBOUNCE_DELAY = 500; // 500ms 防抖延迟
 
-const editorFontFamily = computed(() => appearanceStore.currentEditorFontFamily);
+const editorFontFamily = computed(() => props.fontFamily || appearanceStore.currentEditorFontFamily);
 
 const getDistance = (touches: TouchList): number => {
   if (touches.length < 2) return 0;
@@ -50,6 +62,7 @@ const getDistance = (touches: TouchList): number => {
 };
 
 const onTouchStart = (event: TouchEvent) => {
+  if (!props.enablePinchZoom) return;
   if (editorRef.value && editorRef.value.contains(event.target as Node)) {
     if (event.touches.length === 2) {
       event.preventDefault();
@@ -68,6 +81,7 @@ const debouncedSetMobileEditorFontSize = (size: number) => {
 };
 
 const onTouchMove = (event: TouchEvent) => {
+  if (!props.enablePinchZoom) return;
   if (editorRef.value && editorRef.value.contains(event.target as Node)) {
     if (event.touches.length === 2) {
       event.preventDefault();
@@ -92,6 +106,7 @@ const onTouchMove = (event: TouchEvent) => {
 };
 
 const onTouchEnd = (event: TouchEvent) => {
+  if (!props.enablePinchZoom) return;
   if (event.touches.length < 2) {
     lastPinchDistance = 0;
   }
@@ -217,7 +232,7 @@ const getLanguageExtension = async (lang: string) => {
 
 onMounted(async () => {
   // Initialize font size from store
-  currentFontSize.value = appearanceStore.currentMobileEditorFontSize;
+  currentFontSize.value = props.fontSize || appearanceStore.currentMobileEditorFontSize;
 
   if (editorRef.value) {
     const langExt = await getLanguageExtension(props.language);
@@ -228,9 +243,11 @@ onMounted(async () => {
       state: startState,
       parent: editorRef.value,
     });
-    editorRef.value.addEventListener('touchstart', onTouchStart, { passive: false });
-    editorRef.value.addEventListener('touchmove', onTouchMove, { passive: false });
-    editorRef.value.addEventListener('touchend', onTouchEnd, { passive: false });
+    if (props.enablePinchZoom) {
+      editorRef.value.addEventListener('touchstart', onTouchStart, { passive: false });
+      editorRef.value.addEventListener('touchmove', onTouchMove, { passive: false });
+      editorRef.value.addEventListener('touchend', onTouchEnd, { passive: false });
+    }
   }
 });
 
@@ -239,7 +256,7 @@ onBeforeUnmount(() => {
     view.value.destroy();
     view.value = null;
   }
-  if (editorRef.value) {
+  if (editorRef.value && props.enablePinchZoom) {
     editorRef.value.removeEventListener('touchstart', onTouchStart);
     editorRef.value.removeEventListener('touchmove', onTouchMove);
     editorRef.value.removeEventListener('touchend', onTouchEnd);
@@ -267,7 +284,13 @@ watch(() => props.language, async (newLanguage, oldLanguage) => {
 });
 
 watch(() => appearanceStore.currentMobileEditorFontSize, (newSize) => {
-  if (newSize !== currentFontSize.value) {
+  if (!props.fontSize && newSize !== currentFontSize.value) {
+    currentFontSize.value = newSize;
+  }
+});
+
+watch(() => props.fontSize, (newSize) => {
+  if (newSize && newSize !== currentFontSize.value) {
     currentFontSize.value = newSize;
   }
 });

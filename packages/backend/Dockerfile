@@ -29,7 +29,6 @@ RUN unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY npm_
 
 COPY packages/backend/src ./packages/backend/src
 COPY packages/backend/tsconfig.json ./packages/backend/
-COPY packages/backend/html-presets ./packages/backend/html-presets
 
 RUN npm run build --workspace=@nexus-terminal/backend
 
@@ -62,7 +61,6 @@ RUN apk add --no-cache libstdc++
 
 COPY --from=builder /app/packages/backend/dist ./dist
 COPY --from=builder /app/packages/backend/src/locales ./dist/locales
-COPY --from=builder /app/packages/backend/html-presets ./html-presets
 COPY packages/backend/package.json ./package.json
 RUN unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY npm_config_proxy npm_config_https_proxy npm_config_noproxy \
     && npm config delete proxy || true \
@@ -74,5 +72,4 @@ RUN unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY npm_
 EXPOSE 3001
 
 CMD ["node", "dist/index.js"]
-
 

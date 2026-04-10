@@ -6,7 +6,7 @@ import { tableDefinitions } from './schema.registry';
 import { runMigrations } from './migrations'; // +++ Import runMigrations +++
 
 const dbDir = path.join(__dirname, '..', '..', 'data');
-const dbFilename = 'nexus-terminal.db';
+const dbFilename = 'shadowssh.db';
 const dbPath = path.join(dbDir, dbFilename);
 
 if (!fs.existsSync(dbDir)) {
@@ -148,5 +148,4 @@ process.on('SIGINT', async () => {
         process.exit(0);
     }
 });
-
 

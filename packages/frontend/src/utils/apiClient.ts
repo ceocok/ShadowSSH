@@ -82,12 +82,4 @@ apiClient.interceptors.response.use(
   }
 );
 
-// Passkey Management
-export const fetchPasskeys = () => {
-  return apiClient.get('/auth/user/passkeys');
-};
-
-export const deletePasskey = (credentialID: string) => {
-  return apiClient.delete(`/auth/user/passkeys/${credentialID}`);
-};
 export default apiClient;

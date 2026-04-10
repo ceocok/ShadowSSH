@@ -35,8 +35,6 @@ export interface UseFileManagerContextMenuOptions {
   // --- 回调函数 ---
   onRefresh: () => void;
   onUpload: () => void;
-  onDownload: (items: FileListItem[]) => void; // 文件下载回调
-  onDownloadDirectory: (item: FileListItem) => void; // +++ 文件夹下载回调 +++
   onDelete: () => void; // 删除操作现在由外部处理
   onRename: (item: FileListItem) => void;
   onChangePermissions: (item: FileListItem) => void;
@@ -71,7 +69,6 @@ export function useFileManagerContextMenu(options: UseFileManagerContextMenuOpti
     t,
     onRefresh,
     onUpload,
-    onDownload,
     onDelete,
     onRename,
     onChangePermissions,
@@ -80,7 +77,6 @@ export function useFileManagerContextMenu(options: UseFileManagerContextMenuOpti
     onCopy, // +++ 解构复制回调 +++
     onCut, // +++ 解构剪切回调 +++
     onPaste, // +++ 解构粘贴回调 +++
-    onDownloadDirectory, // +++ 解构文件夹下载回调 +++
     onCompressRequest, // +++ 解构压缩回调 +++
     onDecompressRequest, // +++ 解构解压回调 +++
     onCopyPath, // +++ 解构复制路径回调 +++
@@ -130,15 +126,6 @@ export function useFileManagerContextMenu(options: UseFileManagerContextMenuOpti
             { label: t('fileManager.actions.copy'), action: onCopy, disabled: !(isConnected.value && isSftpReady.value) },
         ];
 
-        // --- 多选下载 ---
-        // 多选时暂时禁用文件夹下载，只允许下载文件
-        // 如果需要支持多选文件夹下载或混合下载，需要更复杂的逻辑和后端支持（例如打包成 zip）
-        // 目前仅在 allFilesSelected 为 true 时启用多文件下载
-         if (allFilesSelected) {
-             menu.push({ label: t('fileManager.actions.downloadMultiple', { count: selectionSize }), action: () => onDownload(selectedFileItems), disabled: !(isConnected.value && isSftpReady.value) });
-         }
-
-
         // --- 多选压缩 ---
         menu.push({
             label: t('fileManager.contextMenu.compress'),
@@ -153,23 +140,11 @@ export function useFileManagerContextMenu(options: UseFileManagerContextMenuOpti
 
 
        menu.push(
-             // --- 分隔符 (视觉) ---
-            { label: t('fileManager.actions.deleteMultiple', { count: selectionSize }), action: onDelete, disabled: !(isConnected.value && isSftpReady.value) },
-            // --- 分隔符 (视觉) ---
-            { label: t('fileManager.actions.refresh'), action: onRefresh, disabled: !(isConnected.value && isSftpReady.value) }
+            { label: t('fileManager.actions.deleteMultiple', { count: selectionSize }), action: onDelete, disabled: !(isConnected.value && isSftpReady.value) }
         );
     } else if (targetItem && targetItem.filename !== '..') {
         // Single item (not '..') menu
         menu = [];
-
-        // --- 修改：区分文件和文件夹下载 ---
-        if (targetItem.attrs.isFile) {
-            menu.push({ label: t('fileManager.actions.download', { name: targetItem.filename }), action: () => onDownload([targetItem]), disabled: !(isConnected.value && isSftpReady.value) }); // 文件下载
-        } else if (targetItem.attrs.isDirectory) {
-            menu.push({ label: t('fileManager.actions.downloadFolder', { name: targetItem.filename }), action: () => onDownloadDirectory(targetItem), disabled: !(isConnected.value && isSftpReady.value) }); // 文件夹下载
-        }
-        
-
 
         // 2. 剪切、复制、粘贴 (粘贴 - 如果是文件夹)
         menu.push({ label: t('fileManager.actions.cut'), action: onCut, disabled: !(isConnected.value && isSftpReady.value) });
@@ -229,9 +204,8 @@ export function useFileManagerContextMenu(options: UseFileManagerContextMenuOpti
 
         // --- 分隔符 (视觉) ---
 
-        // 5. 权限、刷新
+        // 5. 权限
         menu.push({ label: t('fileManager.actions.changePermissions'), action: () => onChangePermissions(targetItem), disabled: !(isConnected.value && isSftpReady.value) });
-        menu.push({ label: t('fileManager.actions.refresh'), action: onRefresh, disabled: !(isConnected.value && isSftpReady.value) });
     } else if (!targetItem) {
         // Right-click on empty space menu
         menu = [
@@ -242,15 +216,10 @@ export function useFileManagerContextMenu(options: UseFileManagerContextMenuOpti
             { label: t('fileManager.actions.newFolder'), action: onNewFolder, disabled: !(isConnected.value && isSftpReady.value) },
             { label: t('fileManager.actions.newFile'), action: onNewFile, disabled: !(isConnected.value && isSftpReady.value) },
             { label: t('fileManager.actions.upload'), action: onUpload, disabled: !(isConnected.value && isSftpReady.value) },
-            // --- 分隔符 (视觉) ---
-            // 3. 刷新
-            { label: t('fileManager.actions.refresh'), action: onRefresh, disabled: !(isConnected.value && isSftpReady.value) },
         ];
     } else { // Clicked on '..'
         menu = [
-             // +++ 粘贴 (可以粘贴到上级目录) +++
-            { label: t('fileManager.actions.paste'), action: onPaste, disabled: !(isConnected.value && isSftpReady.value) || !hasClipboardContent },
-            { label: t('fileManager.actions.refresh'), action: onRefresh, disabled: !(isConnected.value && isSftpReady.value) }
+            { label: t('fileManager.actions.paste'), action: onPaste, disabled: !(isConnected.value && isSftpReady.value) || !hasClipboardContent }
         ];
     }
 

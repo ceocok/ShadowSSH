@@ -1,12 +1,10 @@
 import type { ITheme } from 'xterm';
 
-// 默认 xterm 主题
-// (与 backend/src/config/default-themes.ts 中的定义保持一致)
-export const defaultXtermTheme: ITheme = {
+export const lightXtermTheme: ITheme = {
   background: '#1e1e1e',
   foreground: '#d4d4d4',
   cursor: '#d4d4d4',
-  selectionBackground: '#264f78', // 使用 selectionBackground
+  selectionBackground: '#264f78',
   black: '#000000',
   red: '#cd3131',
   green: '#0dbc79',
@@ -22,34 +20,135 @@ export const defaultXtermTheme: ITheme = {
   brightBlue: '#3b8eea',
   brightMagenta: '#d670d6',
   brightCyan: '#29b8db',
-  brightWhite: '#e5e5e5'
+  brightWhite: '#e5e5e5',
 };
 
-// 默认 UI 主题 (CSS 变量)
-// (与 backend/src/config/default-themes.ts 中的定义保持一致)
-export const defaultUiTheme: Record<string, string> = {
-  '--app-bg-color': '#ffffff',
-  '--text-color': '#333333',
-  '--text-color-secondary': '#666666',
-  '--border-color': '#cccccc',
-  '--link-color': '#8E44AD', // 现代紫色 (Amethyst 变种)
-  '--link-hover-color': '#B180E0', // 现代紫色 - 悬停 (更亮)
-  '--link-active-color': '#A06CD5', // 现代紫色 - 激活 (基础)
-  '--link-active-bg-color': '#F3EBFB', /* 现代紫色 - 激活背景 (非常浅) */
-  '--nav-item-active-bg-color': 'var(--link-active-bg-color)', /* Added */
-  '--header-bg-color': '#f0f0f0',
-  '--footer-bg-color': '#f0f0f0',
-  '--button-bg-color': '#A06CD5', // 现代紫色 - 激活 (基础)
+export const darkXtermTheme: ITheme = {
+  background: '#020617',
+  foreground: '#dbe4f0',
+  cursor: '#dbe4f0',
+  selectionBackground: '#1d4ed8',
+  black: '#0f172a',
+  red: '#f87171',
+  green: '#4ade80',
+  yellow: '#facc15',
+  blue: '#60a5fa',
+  magenta: '#c084fc',
+  cyan: '#22d3ee',
+  white: '#e2e8f0',
+  brightBlack: '#475569',
+  brightRed: '#fca5a5',
+  brightGreen: '#86efac',
+  brightYellow: '#fde68a',
+  brightBlue: '#93c5fd',
+  brightMagenta: '#d8b4fe',
+  brightCyan: '#67e8f9',
+  brightWhite: '#f8fafc',
+};
+
+export const lightUiTheme: Record<string, string> = {
+  '--app-bg-color': '#f7f8fb',
+  '--text-color': '#0f172a',
+  '--text-color-secondary': '#64748b',
+  '--border-color': '#cbd5e1',
+  '--link-color': '#2563eb',
+  '--link-hover-color': '#1d4ed8',
+  '--link-active-color': '#2563eb',
+  '--link-active-bg-color': 'rgba(47, 128, 255, 0.1)',
+  '--nav-item-active-bg-color': 'rgba(47, 128, 255, 0.1)',
+  '--header-bg-color': 'rgba(255, 255, 255, 0.84)',
+  '--footer-bg-color': 'rgba(255, 255, 255, 0.84)',
+  '--button-bg-color': '#2563eb',
   '--button-text-color': '#ffffff',
-  '--button-hover-bg-color': '#8E44AD', // 现代紫色 - 悬停 (稍暗)
-  '--icon-color': 'var(--text-color-secondary)', // 图标颜色
-  '--icon-hover-color': 'var(--link-hover-color)', // 图标悬停颜色 (自动更新)
-  '--split-line-color': 'var(--border-color)', /* 分割线颜色 */
-  '--split-line-hover-color': 'var(--border-color)', /* 分割线悬停颜色 */
-  '--input-focus-border-color': 'var(--link-active-color)', /* 输入框聚焦边框颜色 (自动更新) */
-  '--input-focus-glow': 'var(--link-active-color)', /* 输入框聚焦光晕值 (自动更新) */
-  '--overlay-bg-color': 'rgba(0, 0, 0, 0.6)', /* Added Overlay Background - 恢复 rgba 以支持透明度 */
+  '--button-hover-bg-color': '#1d4ed8',
+  '--icon-color': '#64748b',
+  '--icon-hover-color': '#2563eb',
+  '--split-line-color': '#cbd5e1',
+  '--split-line-hover-color': '#94a3b8',
+  '--input-focus-border-color': '#60a5fa',
+  '--input-focus-glow': '#60a5fa',
+  '--overlay-bg-color': 'rgba(15, 23, 42, 0.6)',
   '--font-family-sans-serif': 'sans-serif',
   '--base-padding': '1rem',
   '--base-margin': '0.5rem',
+  '--surface-page-radial': 'radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), rgba(244, 247, 252, 0.9) 34%, transparent 58%)',
+  '--surface-page-linear': 'linear-gradient(180deg, #f7f8fb 0%, #eef2f7 100%)',
+  '--surface-card-bg': 'rgba(255, 255, 255, 0.9)',
+  '--surface-card-border': 'rgba(148, 163, 184, 0.18)',
+  '--surface-card-shadow': '0 24px 60px rgba(15, 23, 42, 0.14)',
+  '--surface-input-bg': 'rgba(248, 250, 252, 0.92)',
+  '--surface-input-border': 'rgba(203, 213, 225, 0.92)',
+  '--surface-input-highlight': 'rgba(255, 255, 255, 0.8)',
+  '--surface-soft-bg': 'rgba(241, 245, 249, 0.92)',
+  '--surface-overlay-soft': 'rgba(255, 255, 255, 0.72)',
+  '--accent-soft-bg': 'rgba(47, 128, 255, 0.1)',
+  '--accent-strong-soft-bg': 'rgba(219, 234, 254, 0.72)',
+  '--accent-color': '#2563eb',
+  '--danger-soft-bg': 'rgba(239, 68, 68, 0.08)',
+  '--danger-color': '#b91c1c',
+  '--success-soft-bg': 'rgba(34, 197, 94, 0.08)',
+  '--success-color': '#15803d',
+  '--button-primary-gradient': 'linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)',
+  '--button-primary-shadow': '0 14px 28px rgba(37, 99, 235, 0.22)',
+  '--auth-submit-gradient': 'linear-gradient(180deg, #1f2937 0%, #020617 100%)',
+  '--auth-submit-shadow': '0 18px 36px rgba(15, 23, 42, 0.22)',
+  '--terminal-shell-bg': '#1f1f1f',
+  '--terminal-scrollbar-track': '#1f1f1f',
+  '--terminal-scrollbar-thumb': 'rgba(148, 163, 184, 0.55)',
+  '--terminal-scrollbar-thumb-hover': 'rgba(203, 213, 225, 0.72)',
 };
+
+export const darkUiTheme: Record<string, string> = {
+  '--app-bg-color': '#020617',
+  '--text-color': '#e2e8f0',
+  '--text-color-secondary': '#94a3b8',
+  '--border-color': '#334155',
+  '--link-color': '#93c5fd',
+  '--link-hover-color': '#bfdbfe',
+  '--link-active-color': '#60a5fa',
+  '--link-active-bg-color': 'rgba(96, 165, 250, 0.16)',
+  '--nav-item-active-bg-color': 'rgba(96, 165, 250, 0.16)',
+  '--header-bg-color': 'rgba(15, 23, 42, 0.84)',
+  '--footer-bg-color': 'rgba(15, 23, 42, 0.84)',
+  '--button-bg-color': '#3b82f6',
+  '--button-text-color': '#ffffff',
+  '--button-hover-bg-color': '#60a5fa',
+  '--icon-color': '#94a3b8',
+  '--icon-hover-color': '#bfdbfe',
+  '--split-line-color': '#334155',
+  '--split-line-hover-color': '#475569',
+  '--input-focus-border-color': '#60a5fa',
+  '--input-focus-glow': '#60a5fa',
+  '--overlay-bg-color': 'rgba(2, 6, 23, 0.78)',
+  '--font-family-sans-serif': 'sans-serif',
+  '--base-padding': '1rem',
+  '--base-margin': '0.5rem',
+  '--surface-page-radial': 'radial-gradient(circle at top left, rgba(51, 65, 85, 0.42), rgba(15, 23, 42, 0.9) 34%, transparent 58%)',
+  '--surface-page-linear': 'linear-gradient(180deg, #0f172a 0%, #020617 100%)',
+  '--surface-card-bg': 'rgba(15, 23, 42, 0.82)',
+  '--surface-card-border': 'rgba(71, 85, 105, 0.42)',
+  '--surface-card-shadow': '0 28px 70px rgba(2, 6, 23, 0.55)',
+  '--surface-input-bg': 'rgba(15, 23, 42, 0.88)',
+  '--surface-input-border': 'rgba(71, 85, 105, 0.68)',
+  '--surface-input-highlight': 'rgba(30, 41, 59, 0.82)',
+  '--surface-soft-bg': 'rgba(30, 41, 59, 0.82)',
+  '--surface-overlay-soft': 'rgba(15, 23, 42, 0.72)',
+  '--accent-soft-bg': 'rgba(96, 165, 250, 0.16)',
+  '--accent-strong-soft-bg': 'rgba(59, 130, 246, 0.18)',
+  '--accent-color': '#93c5fd',
+  '--danger-soft-bg': 'rgba(251, 113, 133, 0.16)',
+  '--danger-color': '#fda4af',
+  '--success-soft-bg': 'rgba(74, 222, 128, 0.16)',
+  '--success-color': '#86efac',
+  '--button-primary-gradient': 'linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)',
+  '--button-primary-shadow': '0 14px 28px rgba(37, 99, 235, 0.28)',
+  '--auth-submit-gradient': 'linear-gradient(180deg, #60a5fa 0%, #2563eb 100%)',
+  '--auth-submit-shadow': '0 18px 36px rgba(37, 99, 235, 0.28)',
+  '--terminal-shell-bg': '#020617',
+  '--terminal-scrollbar-track': '#020617',
+  '--terminal-scrollbar-thumb': 'rgba(100, 116, 139, 0.55)',
+  '--terminal-scrollbar-thumb-hover': 'rgba(148, 163, 184, 0.78)',
+};
+
+export const defaultXtermTheme = lightXtermTheme;
+export const defaultUiTheme = lightUiTheme;

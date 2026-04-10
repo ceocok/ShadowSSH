@@ -3,16 +3,11 @@ import {
     Setting,
     getSidebarConfig as getSidebarConfigFromRepo,
     setSidebarConfig as setSidebarConfigInRepo,
-    getCaptchaConfig as getCaptchaConfigFromRepo,
-    setCaptchaConfig as setCaptchaConfigInRepo,
 } from '../settings/settings.repository';
 import {
     SidebarConfig,
     PaneName,
     UpdateSidebarConfigDto,
-    CaptchaSettings,
-    UpdateCaptchaSettingsDto,
-    CaptchaProvider,
 } from '../types/settings.types';
 
 // +++ 定义焦点切换完整配置接口 (与前端 store 保持一致) +++
@@ -30,7 +25,6 @@ const LAYOUT_TREE_KEY = 'layoutTree'; // 布局树设置键
 const AUTO_COPY_ON_SELECT_KEY = 'autoCopyOnSelect'; // 终端选中自动复制设置键
 const STATUS_MONITOR_INTERVAL_SECONDS_KEY = 'statusMonitorIntervalSeconds'; // 状态监控间隔设置键
 const DEFAULT_STATUS_MONITOR_INTERVAL_SECONDS = 3; // 默认状态监控间隔
-const IP_BLACKLIST_ENABLED_KEY = 'ipBlacklistEnabled'; // IP 黑名单启用设置键
 const SHOW_CONNECTION_TAGS_KEY = 'showConnectionTags'; // 连接标签显示设置键
 const SHOW_QUICK_COMMAND_TAGS_KEY = 'showQuickCommandTags'; // 快捷指令标签显示设置键
 const SHOW_STATUS_MONITOR_IP_ADDRESS_KEY = 'showStatusMonitorIpAddress'; // 状态监视器IP显示设置键
@@ -86,49 +80,6 @@ export const settingsService = {
   async deleteSetting(key: string): Promise<void> {
     await settingsRepository.deleteSetting(key);
   },
-
-  /**
-   * 获取 IP 白名单设置
-   * @returns 返回包含启用状态和白名单列表的对象
-   */
-  async getIpWhitelistSettings(): Promise<{ enabled: boolean; whitelist: string }> {
-    const enabledStr = await settingsRepository.getSetting('ipWhitelistEnabled');
-    const whitelist = await settingsRepository.getSetting('ipWhitelist');
-    return {
-      enabled: enabledStr === 'true',
-      whitelist: whitelist ?? '',
-    };
-  },
-
-  /**
-   * 更新 IP 白名单设置
-   * @param enabled 是否启用 IP 白名单
-   * @param whitelist 允许的 IP 地址/CIDR 列表 (字符串形式)
-   */
-  async updateIpWhitelistSettings(enabled: boolean, whitelist: string): Promise<void> {
-    await Promise.all([
-      settingsRepository.setSetting('ipWhitelistEnabled', String(enabled)),
-      settingsRepository.setSetting('ipWhitelist', whitelist),
-    ]);
-  },
-
-  /**
-   * 检查 IP 黑名单功能是否已启用
-   * @returns 返回是否启用 (boolean)，如果未设置则默认为 true
-   */
-  async isIpBlacklistEnabled(): Promise<boolean> {
-    console.log(`[Service] Attempting to get setting for key: ${IP_BLACKLIST_ENABLED_KEY}`);
-    try {
-      const enabledStr = await settingsRepository.getSetting(IP_BLACKLIST_ENABLED_KEY);
-      console.log(`[Service] Raw value from repository for ${IP_BLACKLIST_ENABLED_KEY}:`, enabledStr);
-      // 如果设置存在且值为 'false'，则返回 false，否则都返回 true (包括未设置的情况)
-      return enabledStr !== 'false';
-    } catch (error) {
-      console.error(`[Service] Error getting IP blacklist enabled setting (key: ${IP_BLACKLIST_ENABLED_KEY}):`, error);
-      // 出错时返回默认值 true (安全起见，默认启用)
-      return true;
-    }
-  }, 
 
   /**
    * 获取焦点切换顺序
@@ -382,8 +333,7 @@ export const settingsService = {
      // Validate PaneName (using the type imported)
      const validPaneNames: Set<PaneName> = new Set([
          'connections', 'terminal', 'commandBar', 'fileManager',
-         'editor', 'statusMonitor', 'commandHistory', 'quickCommands',
-         'dockerManager', 'suspendedSshSessions' // 添加 "suspendedSshSessions"
+         'editor', 'statusMonitor'
      ]);
 
      const validatePaneArray = (arr: any[], side: string) => {
@@ -412,76 +362,6 @@ export const settingsService = {
      // Directly call the specific repository function
      await setSidebarConfigInRepo(configToSave);
      console.log('[SettingsService] Sidebar config successfully set.');
- }, // <-- Add comma here
-
- // --- CAPTCHA Settings Specific Functions ---
-
- /**
-  * 获取 CAPTCHA 配置
-  * @returns Promise<CaptchaSettings>
-  */
- async getCaptchaConfig(): Promise<CaptchaSettings> {
-     console.log('[SettingsService] Getting CAPTCHA config...');
-     // Directly call the specific repository function
-     const config = await getCaptchaConfigFromRepo();
-     // Mask secret keys before logging
-     const maskedConfig = { ...config, hcaptchaSecretKey: '***', recaptchaSecretKey: '***' };
-     console.log('[SettingsService] Returning CAPTCHA config:', maskedConfig);
-     return config;
- },
-
- /**
-  * 设置 CAPTCHA 配置
-  * @param configDto - The CAPTCHA configuration object from DTO
-  * @returns Promise<void>
-  */
- async setCaptchaConfig(configDto: UpdateCaptchaSettingsDto): Promise<void> {
-     console.log('[SettingsService] Setting CAPTCHA config (DTO):', { ...configDto, hcaptchaSecretKey: '***', recaptchaSecretKey: '***' }); // Mask secrets in log
-
-     // --- Validation ---
-     if (!configDto || typeof configDto !== 'object') {
-         throw new Error('无效的 CAPTCHA 配置格式。');
-     }
-
-     // Fetch the current settings to merge with the DTO
-     const currentConfig = await getCaptchaConfigFromRepo();
-     const configToSave: CaptchaSettings = { ...currentConfig };
-
-     // Validate and update individual fields from DTO
-     if (configDto.enabled !== undefined) {
-         if (typeof configDto.enabled !== 'boolean') throw new Error('captcha.enabled 必须是布尔值。');
-         configToSave.enabled = configDto.enabled;
-     }
-     if (configDto.provider !== undefined) {
-         const validProviders: CaptchaProvider[] = ['hcaptcha', 'recaptcha', 'none'];
-         if (!validProviders.includes(configDto.provider)) throw new Error(`无效的 CAPTCHA 提供商: ${configDto.provider}`);
-         configToSave.provider = configDto.provider;
-     }
-     if (configDto.hcaptchaSiteKey !== undefined) {
-         if (typeof configDto.hcaptchaSiteKey !== 'string') throw new Error('hcaptchaSiteKey 必须是字符串。');
-         configToSave.hcaptchaSiteKey = configDto.hcaptchaSiteKey;
-     }
-     if (configDto.hcaptchaSecretKey !== undefined) {
-         if (typeof configDto.hcaptchaSecretKey !== 'string') throw new Error('hcaptchaSecretKey 必须是字符串。');
-         configToSave.hcaptchaSecretKey = configDto.hcaptchaSecretKey;
-     }
-     if (configDto.recaptchaSiteKey !== undefined) {
-         if (typeof configDto.recaptchaSiteKey !== 'string') throw new Error('recaptchaSiteKey 必须是字符串。');
-         configToSave.recaptchaSiteKey = configDto.recaptchaSiteKey;
-     }
-     if (configDto.recaptchaSecretKey !== undefined) {
-         if (typeof configDto.recaptchaSecretKey !== 'string') throw new Error('recaptchaSecretKey 必须是字符串。');
-         configToSave.recaptchaSecretKey = configDto.recaptchaSecretKey;
-     }
-
-     // Ensure consistency: if disabled, provider should ideally be 'none' (optional enforcement)
-     // if (!configToSave.enabled) {
-     //     configToSave.provider = 'none';
-     // }
-
-     // Directly call the specific repository function with the full, validated config
-     await setCaptchaConfigInRepo(configToSave);
-     console.log('[SettingsService] CAPTCHA config successfully set.');
  }, // <-- Add comma here
 
  // --- Show Connection Tags ---

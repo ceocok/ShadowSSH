@@ -1,7 +1,7 @@
 export interface ConnectionBase {
     id: number;
     name: string | null;
-    type: 'SSH' | 'RDP' | 'VNC';
+    type: 'SSH';
     host: string;
     port: number;
     username: string;
@@ -22,7 +22,7 @@ export interface ConnectionWithTags extends ConnectionBase {
 
 export interface CreateConnectionInput {
     name?: string;
-    type: 'SSH' | 'RDP' | 'VNC';
+    type: 'SSH';
     host: string;
     port?: number;
     username: string;
@@ -41,7 +41,7 @@ notes?: string | null;
 
 export interface UpdateConnectionInput {
     name?: string;
-    type?: 'SSH' | 'RDP' | 'VNC';
+    type?: 'SSH';
     host?: string;
     port?: number;
     username?: string;
@@ -61,7 +61,7 @@ notes?: string | null;
 export interface FullConnectionData {
     id: number;
     name: string | null;
-    type: 'SSH' | 'RDP' | 'VNC';
+    type: 'SSH';
     host: string;
     port: number;
     username: string;

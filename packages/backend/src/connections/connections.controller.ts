@@ -1,10 +1,18 @@
 import { Request, Response } from 'express';
 import * as ConnectionService from './connection.service';
 import * as SshService from '../services/ssh.service';
-import * as GuacamoleService from '../services/guacamole.service'; 
-import * as ImportExportService from '../services/import-export.service';
 import * as ConnectionRepository from './connection.repository';
 
+const normalizeConnectionHost = (value: string | null | undefined): string => {
+    if (!value) {
+        return '';
+    }
+    const normalized = value.trim();
+    if (normalized.startsWith('[') && normalized.endsWith(']')) {
+        return normalized.slice(1, -1).trim();
+    }
+    return normalized;
+};
 
 
 /**
@@ -146,9 +154,10 @@ export const testUnsavedConnection = async (req: Request, res: Response): Promis
     try {
         // 从请求体中提取连接信息 (添加 ssh_key_id)
         const { host, port, username, auth_method, password, private_key, passphrase, proxy_id, ssh_key_id } = req.body;
+        const normalizedHost = normalizeConnectionHost(host);
 
         // 基本验证
-        if (!host || !port || !username || !auth_method) {
+        if (!normalizedHost || !port || !username || !auth_method) {
             res.status(400).json({ success: false, message: '缺少必要的连接信息 (host, port, username, auth_method)。' });
             return;
         }
@@ -171,7 +180,7 @@ export const testUnsavedConnection = async (req: Request, res: Response): Promis
         // 构建传递给服务层的连接配置对象
         // 注意：这里传递的是未经验证和加密处理的原始数据
         const connectionConfig = {
-            host,
+            host: normalizedHost,
             port: parseInt(port, 10), // 确保 port 是数字
             username,
             auth_method,
@@ -214,247 +223,6 @@ export const testUnsavedConnection = async (req: Request, res: Response): Promis
 
 
 
-/**
- * 导出所有连接配置 (GET /api/v1/connections/export)
- */
-export const exportConnections = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const exportedData = await ImportExportService.exportConnectionsAsEncryptedZip();
-
-        // 设置响应头，提示浏览器下载文件
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `nexus-terminal-connections-${timestamp}.zip`;
-        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-        res.setHeader('Content-Type', 'application/zip');
-        res.status(200).send(exportedData);
-
-    } catch (error: any) {
-        console.error('Controller: 导出连接时发生错误:', error);
-        res.status(500).json({ message: error.message || '导出连接时发生内部服务器错误。' });
-    }
-};
-
-/**
- * 导入连接配置 (POST /api/v1/connections/import)
- */
-export const importConnections = async (req: Request, res: Response): Promise<void> => {
-    if (!req.file) {
-        res.status(400).json({ message: '未找到上传的文件 (需要名为 "connectionsFile" 的文件)。' });
-        return;
-    }
-
-    try {
-        const result = await ImportExportService.importConnections(req.file.buffer);
-
-        if (result.failureCount > 0) {
-             res.status(400).json({ 
-                 message: `导入完成，但存在 ${result.failureCount} 个错误。成功导入 ${result.successCount} 条。`,
-                 successCount: result.successCount,
-                 failureCount: result.failureCount,
-                 errors: result.errors
-             });
-        } else {
-
-            res.status(200).json({
-                message: `导入成功完成。共导入 ${result.successCount} 条连接。`,
-                successCount: result.successCount,
-                failureCount: 0
-            });
-        }
-    } catch (error: any) {
-        console.error('Controller: 导入连接时发生错误:', error);
-        if (error.message.includes('解析 JSON 文件失败')) {
-             res.status(400).json({ message: error.message });
-        } else {
-             res.status(500).json({ message: error.message || '导入连接时发生内部服务器错误。' });
-        }
-    }
-};
-import axios from 'axios'; // axios 仍可能用于错误检查类型
-
-// RDP_BACKEND_API_BASE and VNC_BACKEND_API_BASE are now handled in GuacamoleService
-
-/**
- * 获取 RDP 会话的 Guacamole 令牌 (通过调用 RDP 后端)
- * GET /api/v1/connections/:id/rdp-session
- */
-export const getRdpSessionToken = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const connectionId = parseInt(req.params.id, 10);
-        if (isNaN(connectionId)) {
-            res.status(400).json({ message: '无效的连接 ID。' });
-            return;
-        }
-
-        // 1. 获取连接信息和解密后的凭证
-        const connectionData = await ConnectionService.getConnectionWithDecryptedCredentials(connectionId);
-
-        if (!connectionData) {
-            res.status(404).json({ message: '连接未找到。' });
-            return;
-        }
-
-        const { connection, decryptedPassword } = connectionData;
-
-        // 2. 验证连接类型是否为 RDP
-        if (connection.type !== 'RDP') {
-            res.status(400).json({ message: '此连接类型不是 RDP。' });
-            return;
-        }
-
-        // +++ 在确认是 RDP 连接后，立即更新 last_connected_at +++
-        try {
-            const currentTimeSeconds = Math.floor(Date.now() / 1000);
-            await ConnectionRepository.updateLastConnected(connectionId, currentTimeSeconds);
-            console.log(`[Controller:getRdpSessionToken] 已更新 RDP 连接 ${connectionId} 的 last_connected_at 为 ${currentTimeSeconds}`);
-        } catch (updateError) {
-            // 记录更新时间戳的错误，但不阻止获取令牌的流程
-            console.error(`[Controller:getRdpSessionToken] 更新 RDP 连接 ${connectionId} 的 last_connected_at 时出错:`, updateError);
-        }
-        // +++++++++++++++++++++++++++++++++++++++++++++++++++++++
-
-        // 3. 验证 RDP 连接是否使用密码认证
-        if (connection.auth_method !== 'password' || !decryptedPassword) {
-             console.warn(`[Controller:getRdpSessionToken] RDP connection ${connectionId} does not use password auth or password decryption failed.`);
-             res.status(400).json({ message: 'RDP 连接需要使用密码认证，或密码解密失败。' });
-             return;
-        }
-
-        // 4. 调用 GuacamoleService 获取 RDP 令牌
-        // 注意：从 connection.extras 或其他地方获取 RDP 特定的 width, height, dpi
-        const { width, height, dpi } = req.query; // 或者从 connection.extras 获取
-        const rdpWidth = width ? parseInt(width as string, 10) : undefined;
-        const rdpHeight = height ? parseInt(height as string, 10) : undefined;
-        const rdpDpi = dpi ? dpi as string : undefined;
-
-        const guacamoleToken = await GuacamoleService.getRemoteDesktopToken('rdp', connection, decryptedPassword, rdpWidth, rdpHeight, rdpDpi);
-        
-        console.log(`[Controller:getRdpSessionToken] Received Guacamole token via GuacamoleService for RDP connection ${connectionId}`);
-
-        // 5. 将 Guacamole 令牌返回给前端
-        res.status(200).json({ token: guacamoleToken });
-
-    } catch (error: any) {
-        console.error(`Controller: 获取 RDP 会话令牌时发生错误 (ID: ${req.params.id}):`, error.message);
-
-        let statusCode = 500;
-        let responseMessage = '获取 RDP 会话令牌时发生内部服务器错误。';
-
-        if (error.message.includes('调用 RDP 后端服务失败') || error.message.includes('从 RDP 后端获取令牌失败') || error.message.includes('调用 Remote Gateway API 时出错 (RDP)')) {
-            responseMessage = error.message;
-            if (error.message.includes('(状态: 4')) statusCode = 400;
-            else if (error.message.includes('(状态: 5')) statusCode = 502;
-            else statusCode = 503;
-        } else if (error.message.includes('RDP 连接需要使用密码认证') || error.message.includes('密码解密失败') || error.message.includes('RDP 连接使用密码认证，但密码解密失败或未提供密码')) {
-            responseMessage = error.message;
-            statusCode = 400;
-        } else if (error.message.includes('连接类型必须是 RDP')) {
-            responseMessage = error.message;
-            statusCode = 400;
-        }
-        else if (axios.isAxiosError(error)) {
-            responseMessage = '调用远程桌面网关服务时发生网络或请求错误。';
-            if (error.response) {
-                console.error('[Controller:getRdpSessionToken] Remote Gateway error response:', error.response.data);
-                responseMessage += ` (状态: ${error.response.status})`;
-                statusCode = error.response.status >= 500 ? 502 : 400;
-            } else if (error.request) {
-                 console.error('[Controller:getRdpSessionToken] No response from Remote Gateway.');
-                 responseMessage += ' (无法连接或超时)';
-                 statusCode = 504;
-            }
-        } else if (error.message.includes('解密失败')) {
-             responseMessage = '获取 RDP 会话令牌时发生内部错误（凭证处理失败）。';
-        }
-        res.status(statusCode).json({ message: responseMessage });
-    }
-};
-
-/**
- * 获取 VNC 会话的 Guacamole 令牌 (通过调用 Guacamole 服务)
- * GET /api/v1/connections/:id/vnc-session
- */
-export const getVncSessionToken = async (req: Request, res: Response): Promise<void> => {
-    try {
-        const connectionId = parseInt(req.params.id, 10);
-        if (isNaN(connectionId)) {
-            res.status(400).json({ message: '无效的连接 ID。' });
-            return;
-        }
-
-        const connectionData = await ConnectionService.getConnectionWithDecryptedCredentials(connectionId);
-
-        if (!connectionData) {
-            res.status(404).json({ message: '连接未找到。' });
-            return;
-        }
-
-        const { connection, decryptedPassword } = connectionData;
-
-        if (connection.type !== 'VNC') {
-            res.status(400).json({ message: '此连接类型不是 VNC。' });
-            return;
-        }
-
-        try {
-            const currentTimeSeconds = Math.floor(Date.now() / 1000);
-            await ConnectionRepository.updateLastConnected(connectionId, currentTimeSeconds);
-            console.log(`[Controller:getVncSessionToken] 已更新 VNC 连接 ${connectionId} 的 last_connected_at 为 ${currentTimeSeconds}`);
-        } catch (updateError) {
-            console.error(`[Controller:getVncSessionToken] 更新 VNC 连接 ${connectionId} 的 last_connected_at 时出错:`, updateError);
-        }
-
-        if (connection.auth_method !== 'password' || !decryptedPassword) {
-             console.warn(`[Controller:getVncSessionToken] VNC connection ${connectionId} does not use password auth or password decryption failed.`);
-             res.status(400).json({ message: 'VNC 连接需要使用密码认证，或密码解密失败。' });
-             return;
-        }
-
-        const { width, height } = req.query;
-        const initialWidth = width ? parseInt(width as string, 10) : undefined;
-        const initialHeight = height ? parseInt(height as string, 10) : undefined;
-
-        const guacamoleToken = await GuacamoleService.getRemoteDesktopToken('vnc', connection, decryptedPassword, initialWidth, initialHeight);
-
-        console.log(`[Controller:getVncSessionToken] Received Guacamole token via GuacamoleService for VNC connection ${connectionId} with size ${initialWidth}x${initialHeight}`);
-        
-        res.status(200).json({ token: guacamoleToken });
-
-    } catch (error: any) {
-        console.error(`Controller: 获取 VNC 会话令牌时发生错误 (ID: ${req.params.id}):`, error.message);
-
-        let statusCode = 500;
-        let responseMessage = '获取 VNC 会话令牌时发生内部服务器错误。';
-
-        if (error.message.includes('调用 VNC 后端服务失败') || error.message.includes('从 VNC 后端获取令牌失败') || error.message.includes('调用 Remote Gateway API 时出错 (VNC)')) {
-            responseMessage = error.message;
-            if (error.message.includes('(状态: 4')) statusCode = 400;
-            else if (error.message.includes('(状态: 5')) statusCode = 502;
-            else statusCode = 503;
-        } else if (error.message.includes('VNC 连接需要使用密码认证') || error.message.includes('密码解密失败') || error.message.includes('VNC 连接使用密码认证，但密码解密失败或未提供密码')) {
-            responseMessage = error.message;
-            statusCode = 400;
-        } else if (error.message.includes('连接类型必须是 VNC')) {
-            responseMessage = error.message;
-            statusCode = 400;
-        }
-        else if (axios.isAxiosError(error)) {
-            responseMessage = '调用远程桌面网关服务时发生网络或请求错误。';
-            if (error.response) {
-                console.error('[Controller:getVncSessionToken] Remote Gateway error response:', error.response.data);
-                responseMessage += ` (状态: ${error.response.status})`;
-                statusCode = error.response.status >= 500 ? 502 : 400;
-            } else if (error.request) {
-                 console.error('[Controller:getVncSessionToken] No response from Remote Gateway.');
-                 responseMessage += ' (无法连接或超时)';
-                 statusCode = 504;
-            }
-        } else if (error.message.includes('解密失败')) {
-             responseMessage = '获取 VNC 会话令牌时发生内部错误（凭证处理失败）。';
-        }
-        res.status(statusCode).json({ message: responseMessage });
-    }
-};
 /**
  * 克隆连接 (POST /api/v1/connections/:id/clone)
  */

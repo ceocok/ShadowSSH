@@ -1,10 +1,6 @@
 import { Database } from 'sqlite3';
 import * as schemaSql from './schema';
-import * as appearanceRepository from '../appearance/appearance.repository';
-import * as terminalThemeRepository from '../terminal-themes/terminal-theme.repository';
 import * as settingsRepository from '../settings/settings.repository'; 
-import { presetTerminalThemes } from '../config/preset-themes-definition';
-import { runDb } from './connection'; 
 
 /**
  * Interface describing a database table definition for initialization.
@@ -14,34 +10,6 @@ export interface TableDefinition {
     sql: string;
     init?: (db: Database) => Promise<void>; 
 }
-
-
-
-
-
-/**
- * Initializes preset terminal themes.
- * Assumes terminalThemeRepository.initializePresetThemes might need the db instance.
- */
-const initTerminalThemesTable = async (db: Database): Promise<void> => {
-    // Pass the db instance to the repository function
-    // Note: This might require modifying initializePresetThemes if it doesn't accept db
-    await terminalThemeRepository.initializePresetThemes(db, presetTerminalThemes);
-    console.log('[DB Init] 预设主题初始化检查完成。');
-};
-
-/**
- * Ensures default appearance settings exist.
- * Assumes appearanceRepository.ensureDefaultSettingsExist might need the db instance.
- */
-const initAppearanceSettingsTable = async (db: Database): Promise<void> => {
-    // Pass the db instance to the repository function
-    // Note: This might require modifying ensureDefaultSettingsExist if it doesn't accept db
-    await appearanceRepository.ensureDefaultSettingsExist(db);
-    console.log('[DB Init] 外观设置初始化检查完成。');
-};
-
-
 // --- Table Definitions Registry ---
 
 /**
@@ -75,16 +43,4 @@ export const tableDefinitions: TableDefinition[] = [
     { name: 'path_history', sql: schemaSql.createPathHistoryTableSQL },
     { name: 'quick_commands', sql: schemaSql.createQuickCommandsTableSQL },
     { name: 'favorite_paths', sql: schemaSql.createFavoritePathsTableSQL }, // Added Favorite Paths table
-
-    // Appearance related tables (often depend on others or have init logic)
-    {
-        name: 'terminal_themes',
-        sql: schemaSql.createTerminalThemesTableSQL,
-        init: initTerminalThemesTable
-    },
-    {
-        name: 'appearance_settings',
-        sql: schemaSql.createAppearanceSettingsTableSQL,
-        init: initAppearanceSettingsTable
-     }, // Depends on terminal_themes
 ];

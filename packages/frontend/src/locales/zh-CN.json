@@ -1,18 +1,13 @@
 {
-  "appName": "星枢终端",
-  "projectName": "星枢终端",
-  "slogan": "星垂平野阔，枢动万端通",
+  "appName": "ShadowSSH",
+  "projectName": "ShadowSSH",
+  "slogan": "轻量、专注、干净的 SSH 客户端",
   "nav": {
-    "dashboard": "仪表盘",
     "terminal": "终端",
     "connections": "连接管理",
-    "proxies": "代理管理",
     "login": "登录",
     "logout": "登出",
-    "notifications": "通知管理",
-    "auditLogs": "审计日志",
-    "settings": "设置",
-    "customizeStyle": "自定义外观"
+    "settings": "设置"
   },
   "styleCustomizer": {
     "title": "外观自定义",
@@ -406,8 +401,29 @@
     }
   },
   "workspace": {
+    "sessionLimitReached": "最多只能同时打开 {count} 个会话。",
+    "status": {
+      "connectingWs": "正在连接 WebSocket...",
+      "wsConnected": "WebSocket 已连接",
+      "reconnecting": "正在重连（第 {attempt} 次，{delay} 秒后）...",
+      "reconnectFailed": "重连失败",
+      "error": "连接错误：{message}",
+      "connected": "已连接",
+      "disconnected": "已断开",
+      "wsClosed": "连接已关闭（代码 {code}）",
+      "wsClosedWillRetry": "连接已关闭（代码 {code}），准备重试",
+      "wsError": "WebSocket 连接错误",
+      "markedForSuspendNoReconnect": "连接已标记为挂起，不再自动重连"
+    },
     "terminal": {
-      "reconnectingMsg": "正在尝试重新连接..."
+      "reconnectingMsg": "正在尝试重新连接...",
+      "genericErrorMsg": "错误：{message}",
+      "disconnectMsg": "连接已断开：{reason}",
+      "errorPrefix": "错误：",
+      "infoPrefix": "提示：",
+      "unknownReason": "未知原因",
+      "unknownSshError": "未知 SSH 错误",
+      "unknownGenericError": "未知错误"
     }
   },
 "fileEditor": {
@@ -576,7 +592,7 @@
     "title": "服务器状态",
     "errorPrefix": "错误:",
     "loading": "等待数据...",
-    "cpuModelLabel": "CPU 型号:",
+    "cpuModelLabel": "CPU:",
     "osLabel": "系统:",
     "cpuLabel": "CPU:",
     "memoryLabel": "内存:",

@@ -1,9 +1,5 @@
 import { Client, ClientChannel, ConnectConfig } from 'ssh2';
-import { SocksClient, SocksClientOptions } from 'socks';
-import http from 'http';
-import net from 'net';
 import * as ConnectionRepository from '../connections/connection.repository';
-import *   as ProxyRepository from '../proxies/proxy.repository';
 import { decrypt } from '../utils/crypto';
 import * as SshKeyService from '../ssh_keys/ssh_key.service';
 
@@ -46,17 +42,8 @@ export interface DecryptedConnectionDetails {
     password?: string; // Decrypted
     privateKey?: string; // Decrypted
     passphrase?: string; // Decrypted
-    proxy?: {
-        id: number;
-        name: string;
-        type: 'SOCKS5' | 'HTTP';
-        host: string;
-        port: number;
-        username?: string;
-        password?: string; // Decrypted
-    } | null;
     jump_chain?: JumpHostDetail[]; 
-    connection_proxy_setting?: 'proxy' | 'jump' | null; 
+    connection_proxy_setting?: 'jump' | null; 
 }
 
 /**
@@ -87,9 +74,8 @@ export const getConnectionDetails = async (connectionId: number): Promise<Decryp
             password: undefined,
             privateKey: undefined,
             passphrase: undefined,
-            proxy: null,
             jump_chain: undefined,
-            connection_proxy_setting: typedRawConnInfo.proxy_type ?? null,
+            connection_proxy_setting: typedRawConnInfo.proxy_type === 'jump' ? 'jump' : null,
         };
 
         if (fullConnInfo.auth_method === 'password' && rawConnInfo.encrypted_password) {
@@ -112,25 +98,6 @@ export const getConnectionDetails = async (connectionId: number): Promise<Decryp
             } else {
                  console.warn(`SshService: Connection ${connectionId} uses key auth but has neither ssh_key_id nor encrypted_private_key.`);
             }
-        }
-
-        if (typedRawConnInfo.proxy_db_id) {
-             const proxyName = typedRawConnInfo.proxy_name ?? (() => { throw new Error(`Proxy for Connection ID ${connectionId} has null name.`); })();
-             const proxyType = typedRawConnInfo.actual_proxy_server_type ?? (() => { throw new Error(`Proxy for Connection ID ${connectionId} (actual_proxy_server_type) has null type.`); })();
-             const proxyHost = typedRawConnInfo.proxy_host ?? (() => { throw new Error(`Proxy for Connection ID ${connectionId} has null host.`); })();
-             const proxyPort = typedRawConnInfo.proxy_port ?? (() => { throw new Error(`Proxy for Connection ID ${connectionId} has null port.`); })();
-             if (proxyType !== 'SOCKS5' && proxyType !== 'HTTP') {
-                throw new Error(`Proxy for Connection ID ${connectionId} has invalid actual_proxy_server_type: ${proxyType}`);
-             }
-            fullConnInfo.proxy = {
-                id: typedRawConnInfo.proxy_db_id,
-                name: proxyName,
-                type: proxyType,
-                host: proxyHost,
-                port: proxyPort,
-                username: typedRawConnInfo.proxy_username || undefined,
-                password: typedRawConnInfo.proxy_encrypted_password ? decrypt(typedRawConnInfo.proxy_encrypted_password) : undefined,
-            };
         }
 
         // 修改条件判断和 JSON.parse 以使用正确的字段名 jump_chain
@@ -263,141 +230,6 @@ const _establishDirectSshConnection = (
         connDetails.id,
         connDetails.name
     );
-};
-
-// --- Helper functions for proxy connections ---
-const _connectViaSocksProxy = (
-    destinationHost: string,
-    destinationPort: number,
-    proxyDetails: NonNullable<DecryptedConnectionDetails['proxy']>,
-    timeout: number
-): Promise<net.Socket> => {
-    return new Promise((resolve, reject) => {
-        const socksOptions: SocksClientOptions = {
-            proxy: {
-                host: proxyDetails.host,
-                port: proxyDetails.port,
-                type: 5,
-                userId: proxyDetails.username,
-                password: proxyDetails.password
-            },
-            command: 'connect',
-            destination: { host: destinationHost, port: destinationPort },
-            timeout: timeout,
-        };
-
-        SocksClient.createConnection(socksOptions)
-            .then(({ socket }) => {
-                resolve(socket);
-            })
-            .catch(socksError => {
-                const errMsg = `SOCKS5 proxy ${proxyDetails.host}:${proxyDetails.port} connection failed: ${socksError.message}`;
-                console.error(`SshService: ${errMsg}`);
-                reject(new Error(errMsg));
-            });
-    });
-};
-
-const _connectViaHttpProxy = (
-    destinationHost: string,
-    destinationPort: number,
-    proxyDetails: NonNullable<DecryptedConnectionDetails['proxy']>,
-    timeout: number
-): Promise<net.Socket> => {
-    return new Promise((resolve, reject) => {
-        const reqOptions: http.RequestOptions = {
-            method: 'CONNECT',
-            host: proxyDetails.host,
-            port: proxyDetails.port,
-            path: `${destinationHost}:${destinationPort}`,
-            timeout: timeout,
-            agent: false
-        };
-        if (proxyDetails.username) {
-            const auth = 'Basic ' + Buffer.from(proxyDetails.username + ':' + (proxyDetails.password || '')).toString('base64');
-            reqOptions.headers = {
-                ...reqOptions.headers,
-                'Proxy-Authorization': auth,
-                'Proxy-Connection': 'Keep-Alive',
-                'Host': `${destinationHost}:${destinationPort}`
-            };
-        }
-
-        const req = http.request(reqOptions);
-
-        req.on('connect', (res, socket, head) => {
-            if (res.statusCode === 200) {
-                resolve(socket);
-            } else {
-                socket.destroy();
-                const errMsg = `HTTP proxy ${proxyDetails.host}:${proxyDetails.port} connection failed (status: ${res.statusCode})`;
-                console.error(`SshService: ${errMsg}`);
-                reject(new Error(errMsg));
-            }
-        });
-        req.on('error', (err) => {
-            const errMsg = `HTTP proxy ${proxyDetails.host}:${proxyDetails.port} request error: ${err.message}`;
-            console.error(`SshService: ${errMsg}`);
-            reject(new Error(errMsg));
-        });
-        req.on('timeout', () => {
-            req.destroy();
-            const errMsg = `HTTP proxy ${proxyDetails.host}:${proxyDetails.port} connection timed out`;
-            console.error(`SshService: ${errMsg}`);
-            reject(new Error(errMsg));
-        });
-        req.end();
-    });
-};
-
-const _establishProxyConnection = async (
-    connDetails: DecryptedConnectionDetails,
-    timeout: number
-): Promise<Client> => {
-    const proxy = connDetails.proxy!;
-
-    const sshClient = new Client();
-    const baseConnectConfig: ConnectConfig = {
-        username: connDetails.username,
-        password: connDetails.password,
-        privateKey: connDetails.privateKey,
-        passphrase: connDetails.passphrase,
-        readyTimeout: timeout,
-        keepaliveInterval: 5000,
-        keepaliveCountMax: 10,
-    };
-
-    try {
-        let proxySocket: net.Socket;
-        if (proxy.type === 'SOCKS5') {
-            proxySocket = await _connectViaSocksProxy(connDetails.host, connDetails.port, proxy, timeout);
-        } else if (proxy.type === 'HTTP') {
-            proxySocket = await _connectViaHttpProxy(connDetails.host, connDetails.port, proxy, timeout);
-        } else {
-            throw new Error(`Unsupported proxy type: ${proxy.type}`);
-        }
-
-        const connectConfigWithSocket: ConnectConfig = {
-            ...baseConnectConfig,
-            sock: proxySocket,
-            // host and port are for the final destination; ssh2 uses sock if provided
-            host: connDetails.host, // Kept for clarity/logging, not strictly needed by ssh2 with sock
-            port: connDetails.port, // Kept for clarity/logging
-        };
-
-        return _setupSshClientListenersAndConnect(
-            sshClient,
-            connectConfigWithSocket,
-            true, // isFinalClient
-            connDetails.id,
-            connDetails.name
-        );
-
-    } catch (proxyError: any) {
-        console.error(`SshService: Proxy connection setup failed for ${connDetails.name}: ${proxyError.message}`);
-        try { sshClient.end(); } catch(e) { /* ignore */ }
-        throw proxyError;
-    }
 };
 
 // --- Helper function for preparing ConnectConfig for each jump hop ---
@@ -592,13 +424,6 @@ export const establishSshConnection = (
             console.warn(`SshService: Connection ${connDetails.name} set to 'jump' but jump_chain is MISSING or EMPTY. Attempting direct connection as fallback.`);
             return _establishDirectSshConnection(connDetails, timeout);
         }
-    } else if (connDetails.connection_proxy_setting === 'proxy') {
-        if (connDetails.proxy) {
-            return _establishProxyConnection(connDetails, timeout);
-        } else {
-            console.warn(`SshService: Connection ${connDetails.name} set to 'proxy' but proxy details are MISSING. Attempting direct connection as fallback.`);
-            return _establishDirectSshConnection(connDetails, timeout);
-        }
     } else {
         if (connDetails.connection_proxy_setting && connDetails.connection_proxy_setting !== null && connDetails.connection_proxy_setting !== undefined) {
         }
@@ -656,7 +481,7 @@ export const testConnection = async (connectionId: number): Promise<{ latency: n
 
 
 /**
- * 测试未保存的 SSH 连接信息（包括代理）
+ * 测试未保存的 SSH 连接信息
  * @param connectionConfig - 包含连接参数的对象
  * @returns Promise<{ latency: number }> - 如果连接成功则 resolve 包含延迟的对象，否则 reject
  * @throws Error 如果连接失败或配置错误
@@ -670,7 +495,6 @@ export const testUnsavedConnection = async (connectionConfig: {
     private_key?: string;
     passphrase?: string;
     ssh_key_id?: number | null;
-    proxy_id?: number | null;
 }): Promise<{ latency: number }> => {
     console.log(`SshService: 测试未保存的连接到 ${connectionConfig.host}:${connectionConfig.port}...`);
     let sshClient: Client | null = null;
@@ -686,8 +510,7 @@ export const testUnsavedConnection = async (connectionConfig: {
             password: undefined,
             privateKey: undefined,
             passphrase: undefined,
-            proxy: null,
-            connection_proxy_setting: connectionConfig.proxy_id ? 'proxy' : null,
+            connection_proxy_setting: null,
         };
 
         if (tempConnDetails.auth_method === 'password') {
@@ -705,41 +528,6 @@ export const testUnsavedConnection = async (connectionConfig: {
                 tempConnDetails.privateKey = connectionConfig.private_key;
                 tempConnDetails.passphrase = connectionConfig.passphrase;
             }
-        }
-
-        if (connectionConfig.proxy_id) {
-            console.log(`SshService: 测试连接需要获取代理 ${connectionConfig.proxy_id} 的信息...`);
-            const rawProxyInfo = await ProxyRepository.findProxyById(connectionConfig.proxy_id);
-            if (!rawProxyInfo) {
-                throw new Error(`代理 ID ${connectionConfig.proxy_id} 未找到。`);
-            }
-            try {
-                 const proxyName = rawProxyInfo.name ?? (() => { throw new Error(`Proxy ID ${connectionConfig.proxy_id} has null name.`); })();
-                 const proxyType = rawProxyInfo.type ?? (() => { throw new Error(`Proxy ID ${connectionConfig.proxy_id} has null type.`); })();
-                 const proxyHost = rawProxyInfo.host ?? (() => { throw new Error(`Proxy ID ${connectionConfig.proxy_id} has null host.`); })();
-                 const proxyPort = rawProxyInfo.port ?? (() => { throw new Error(`Proxy ID ${connectionConfig.proxy_id} has null port.`); })();
-
-                 if (proxyType !== 'SOCKS5' && proxyType !== 'HTTP') {
-                    throw new Error(`Proxy ID ${connectionConfig.proxy_id} has invalid type: ${proxyType}`);
-                 }
-
-                tempConnDetails.proxy = {
-                    id: rawProxyInfo.id,
-                    name: proxyName,
-                    type: proxyType,
-                    host: proxyHost,
-                    port: proxyPort,
-                    username: rawProxyInfo.username || undefined,
-                    password: rawProxyInfo.encrypted_password ? decrypt(rawProxyInfo.encrypted_password) : undefined,
-                };
-                tempConnDetails.connection_proxy_setting = 'proxy'; // Ensure this is set
-                console.log(`SshService: 代理 ${connectionConfig.proxy_id} 信息获取并解密成功。`);
-            } catch (decryptError: any) {
-                console.error(`SshService: 处理代理 ${connectionConfig.proxy_id} 凭证失败:`, decryptError);
-                throw new Error(`处理代理凭证失败: ${decryptError.message}`);
-            }
-        } else {
-            tempConnDetails.connection_proxy_setting = null; // Explicitly no proxy
         }
 
         sshClient = await establishSshConnection(tempConnDetails, TEST_TIMEOUT);

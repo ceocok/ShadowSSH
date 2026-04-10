@@ -1,7 +1,7 @@
 {
-  "name": "Nexus Terminal",
-  "short_name": "NexusTerm",
-  "description": "A modern, web-based terminal.",
+  "name": "ShadowSSH",
+  "short_name": "ShadowSSH",
+  "description": "A lightweight web SSH client.",
   "icons": [
     {
       "src": "/icons/icon-144x144.png",
@@ -24,8 +24,8 @@
   ],
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#333333",
-  "theme_color": "#9370DB",
+  "background_color": "#0f172a",
+  "theme_color": "#020617",
   "scope": "/",
   "orientation": "portrait-primary"
 }

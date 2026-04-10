@@ -1,8 +1,6 @@
 import { Request, Response } from 'express';
 import * as TagService from './tag.service';
-import { AuditLogService } from '../audit/audit.service';
 
-const auditLogService = new AuditLogService();
 
 /**
  * 创建新标签 (POST /api/v1/tags)
@@ -17,9 +15,7 @@ export const createTag = async (req: Request, res: Response): Promise<void> => {
 
     try {
         const newTag = await TagService.createTag(name);
-        // 记录审计日志
-        auditLogService.logAction('TAG_CREATED', { tagId: newTag.id, name: newTag.name });
-        res.status(201).json({ message: '标签创建成功。', tag: newTag });
+        // 记录审计日志        res.status(201).json({ message: '标签创建成功。', tag: newTag });
     } catch (error: any) {
         console.error('Controller: 创建标签时发生错误:', error);
         if (error.message.includes('已存在')) {
@@ -88,9 +84,7 @@ export const updateTag = async (req: Request, res: Response): Promise<void> => {
         if (!updatedTag) {
             res.status(404).json({ message: '标签未找到。' });
         } else {
-            // 记录审计日志
-            auditLogService.logAction('TAG_UPDATED', { tagId, newName: name });
-            res.status(200).json({ message: '标签更新成功。', tag: updatedTag });
+            // 记录审计日志            res.status(200).json({ message: '标签更新成功。', tag: updatedTag });
         }
     } catch (error: any) {
         console.error(`Controller: 更新标签 ${tagId} 时发生错误:`, error);
@@ -121,9 +115,7 @@ export const deleteTag = async (req: Request, res: Response): Promise<void> => {
         if (!deleted) {
             res.status(404).json({ message: '标签未找到。' });
         } else {
-            // 记录审计日志
-            auditLogService.logAction('TAG_DELETED', { tagId });
-            res.status(200).json({ message: '标签删除成功。' });
+            // 记录审计日志            res.status(200).json({ message: '标签删除成功。' });
         }
     } catch (error: any) {
         console.error(`Controller: 删除标签 ${tagId} 时发生错误:`, error);

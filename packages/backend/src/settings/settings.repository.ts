@@ -1,10 +1,8 @@
 import { getDbInstance, runDb, getDb as getDbRow, allDb } from '../database/connection';
 import { SidebarConfig, LayoutNode, PaneName } from '../types/settings.types';
-import { CaptchaSettings } from '../types/settings.types';
 import * as sqlite3 from 'sqlite3';
 
 const SIDEBAR_CONFIG_KEY = 'sidebarConfig';
-const CAPTCHA_CONFIG_KEY = 'captchaConfig';
 
 export interface Setting {
   key: string;
@@ -128,66 +126,6 @@ export const setSidebarConfig = async (config: SidebarConfig): Promise<void> => 
 };
 
 /**
- * 获取 CAPTCHA 配置
- * @returns Promise<CaptchaSettings> - 返回解析后的配置或默认值
- */
-export const getCaptchaConfig = async (): Promise<CaptchaSettings> => {
-    const defaultValue: CaptchaSettings = {
-        enabled: false,
-        provider: 'none',
-        hcaptchaSiteKey: '',
-        hcaptchaSecretKey: '',
-        recaptchaSiteKey: '',
-        recaptchaSecretKey: '',
-    };
-    try {
-        const jsonString = await settingsRepository.getSetting(CAPTCHA_CONFIG_KEY);
-        if (jsonString) {
-            try {
-                const config = JSON.parse(jsonString);
-                if (config && typeof config.enabled === 'boolean' && typeof config.provider === 'string') {
-                     return {
-                        enabled: config.enabled ?? defaultValue.enabled,
-                        provider: config.provider ?? defaultValue.provider,
-                        hcaptchaSiteKey: config.hcaptchaSiteKey ?? defaultValue.hcaptchaSiteKey,
-                        hcaptchaSecretKey: config.hcaptchaSecretKey ?? defaultValue.hcaptchaSecretKey,
-                        recaptchaSiteKey: config.recaptchaSiteKey ?? defaultValue.recaptchaSiteKey,
-                        recaptchaSecretKey: config.recaptchaSecretKey ?? defaultValue.recaptchaSecretKey,
-                     } as CaptchaSettings;
-                }
-                console.warn(`[设置仓库] 在数据库中发现无效的 captchaConfig 格式: ${jsonString}。返回默认值。`);
-            } catch (parseError) {
-                console.error(`[设置仓库] 从数据库解析 captchaConfig JSON 失败: ${jsonString}`, parseError);
-            }
-        }
-    } catch (error) {
-        console.error(`[设置仓库] 获取 CAPTCHA 配置设置时出错 (键: ${CAPTCHA_CONFIG_KEY}):`, error);
-    }
-    return defaultValue;
-};
-
-/**
- * 设置 CAPTCHA 配置
- */
-export const setCaptchaConfig = async (config: CaptchaSettings): Promise<void> => {
-    try {
-        if (!config || typeof config !== 'object' || typeof config.enabled !== 'boolean' || typeof config.provider !== 'string') {
-             throw new Error('提供了无效的 CAPTCHA 配置对象。');
-        }
-        config.hcaptchaSecretKey = config.hcaptchaSecretKey || '';
-        config.recaptchaSecretKey = config.recaptchaSecretKey || '';
-        config.hcaptchaSiteKey = config.hcaptchaSiteKey || '';
-        config.recaptchaSiteKey = config.recaptchaSiteKey || '';
-
-        const jsonString = JSON.stringify(config);
-        await settingsRepository.setSetting(CAPTCHA_CONFIG_KEY, jsonString);
-    } catch (error) {
-        console.error(`[设置仓库] 设置 CAPTCHA 配置时出错 (键: ${CAPTCHA_CONFIG_KEY}):`, error);
-        throw new Error('保存 CAPTCHA 配置失败。');
-    }
-};
-
-/**
  * 确保设置表中存在默认设置。
  * 此函数应在数据库初始化期间调用。
  */
@@ -204,9 +142,7 @@ export const ensureDefaultSettingsExist = async (db: sqlite3.Database): Promise<
           type: "container",
           direction: "vertical",
           children: [
-            { type: "pane", component: "statusMonitor", size: 44.56 },
-            { type: "pane", component: "commandHistory", size: 26.24 },
-            { type: "pane", component: "quickCommands", size: 29.20 }
+            { type: "pane", component: "statusMonitor", size: 100 }
           ],
           size: 14.59
         },
@@ -232,35 +168,21 @@ export const ensureDefaultSettingsExist = async (db: sqlite3.Database): Promise<
     };
 
     const defaultSidebarPanesStructure: SidebarConfig = {
-      left: ["connections", "dockerManager"],
+      left: ["connections"],
       right: []
     };
 
-    const defaultCaptchaSettings: CaptchaSettings = {
-        enabled: false,
-        provider: 'none',
-        hcaptchaSiteKey: '',
-        hcaptchaSecretKey: '',
-        recaptchaSiteKey: '',
-        recaptchaSecretKey: '',
-    };
-
     const defaultSettings: Record<string, string> = {
-        ipWhitelistEnabled: 'false',
-        ipWhitelist: '',
         maxLoginAttempts: '5',
         loginBanDuration: '300',
-        focusSwitcherSequence: JSON.stringify(["quickCommandsSearch", "commandHistorySearch", "fileManagerSearch", "commandInput", "terminalSearch"]),
+        focusSwitcherSequence: JSON.stringify(["fileManagerSearch", "commandInput", "terminalSearch"]),
         navBarVisible: 'true',
         layoutTree: JSON.stringify(defaultLayoutTreeStructure),
         autoCopyOnSelect: 'false',
         showPopupFileEditor: 'false',
         shareFileEditorTabs: 'true',
-        dockerStatusIntervalSeconds: '5',
-        dockerDefaultExpand: 'false',
         statusMonitorIntervalSeconds: '3',
         [SIDEBAR_CONFIG_KEY]: JSON.stringify(defaultSidebarPanesStructure),
-        [CAPTCHA_CONFIG_KEY]: JSON.stringify(defaultCaptchaSettings),
         timezone: 'UTC', // 时区默认值
         terminalScrollbackLimit: '5000', // 终端回滚行数默认值
         terminalEnableRightClickPaste: 'true', // 终端右键粘贴默认值

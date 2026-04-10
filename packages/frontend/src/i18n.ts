@@ -8,11 +8,12 @@ const localeModules = import.meta.glob('./locales/*.json', { eager: true, import
 // 构建 messages 对象和可用语言列表
 const messages: Record<string, any> = {};
 const availableLocales: string[] = [];
+const enabledLocales = new Set(['zh-CN', 'en-US']);
 
 for (const path in localeModules) {
   // 从路径中提取语言代码 (例如 './locales/en.json' -> 'en')
   const locale = path.match(/.\/locales\/(.+)\.json$/)?.[1];
-  if (locale) {
+  if (locale && enabledLocales.has(locale)) {
     messages[locale] = localeModules[path]; // 获取导入的 JSON 内容
     availableLocales.push(locale);
   }
@@ -33,8 +34,8 @@ interface RecursiveStringRecord {
 }
 type MessageSchema = RecursiveStringRecord;
 
-// 定义默认语言 (优先使用 'en-US'，如果不存在则使用第一个找到的语言)
-export const defaultLng = availableLocales.includes('en-US') ? 'en-US' : availableLocales[0] || 'en-US'; // 更新为 en-US
+// 定义默认语言，当前产品默认使用中文
+export const defaultLng = availableLocales.includes('zh-CN') ? 'zh-CN' : availableLocales[0] || 'zh-CN';
 const localStorageKey = 'user-locale';
 
 // 尝试从 localStorage 获取语言，否则回退

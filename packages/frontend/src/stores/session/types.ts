@@ -3,7 +3,6 @@
 import type { Ref } from 'vue';
 import type { FileTab as OriginalFileTab } from '../fileEditor.store'; 
 import type { WsConnectionStatus } from '../../composables/useWebSocketConnection'; 
-import type { DockerManagerInstance as OriginalDockerManagerInstance } from '../../composables/useDockerManager'; 
 
 // 导入工厂函数仅用于通过 ReturnType 推导实例类型
 // 这些导入仅用于类型推断，不在运行时使用
@@ -19,9 +18,6 @@ export type SftpManagerInstance = ReturnType<typeof createSftpActionsManager>;
 export type SshTerminalInstance = ReturnType<typeof createSshTerminalManager>;
 export type StatusMonitorInstance = ReturnType<typeof createStatusMonitorManager>;
 
-// 为 DockerManagerInstance 创建一个本地类型别名，并导出它
-export type DockerManagerInstance = OriginalDockerManagerInstance;
-
 // 重新导出 FileTab 类型，使其可用于其他模块
 export type FileTab = OriginalFileTab;
 
@@ -29,11 +25,11 @@ export interface SessionState {
   sessionId: string;
   connectionId: string; // 数据库中的连接 ID
   connectionName: string; // 用于显示
+  resolvedTargetIp?: string | null;
   wsManager: WsManagerInstance;
   sftpManagers: Map<string, SftpManagerInstance>; // 使用 Map 管理多个实例
   terminalManager: SshTerminalInstance;
   statusMonitorManager: StatusMonitorInstance;
-  dockerManager: DockerManagerInstance; // 现在应该可以找到 DockerManagerInstance
   // --- 独立编辑器状态 ---
   editorTabs: Ref<FileTab[]>; // 编辑器标签页列表
   activeEditorTabId: Ref<string | null>; // 当前活动的编辑器标签页 ID

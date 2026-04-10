@@ -159,3 +159,6 @@ dist-scripts/
 /packages/backend/data
 electron-app/node_modules/
 electron-app/dist_electron/
+# macOS
+.DS_Store
+**/.DS_Store

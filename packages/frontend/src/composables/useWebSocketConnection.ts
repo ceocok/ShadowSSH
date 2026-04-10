@@ -39,6 +39,7 @@ export function createWebSocketConnectionManager(
     let reconnectTimeoutId: ReturnType<typeof setTimeout> | null = null; // 重连定时器 ID
     let lastUrl = ''; // 保存上次连接的 URL
     let intentionalDisconnect = false; // 标记是否为用户主动断开
+    const suppressDisconnectError = ref(false);
 
 
     /**
@@ -118,6 +119,7 @@ export function createWebSocketConnectionManager(
     const connect = (url: string) => {
         lastUrl = url; // 保存 URL 以便重连
         intentionalDisconnect = false; // 重置主动断开标记
+        suppressDisconnectError.value = false;
         if (reconnectTimeoutId) {
             clearTimeout(reconnectTimeoutId); // 清除可能存在的重连定时器
             reconnectTimeoutId = null;
@@ -297,6 +299,10 @@ export function createWebSocketConnectionManager(
         }
     };
 
+    const markReconnectInProgress = () => {
+        suppressDisconnectError.value = true;
+    };
+
     /**
      * 发送 WebSocket 消息
      * @param {WebSocketMessage} message - 要发送的消息对象
@@ -353,10 +359,12 @@ export function createWebSocketConnectionManager(
         isSftpReady: readonly(isSftpReady),
         connectionStatus: readonly(connectionStatus),
         statusMessage: readonly(statusMessage),
+        suppressDisconnectError: readonly(suppressDisconnectError),
 
         // 方法
         connect,
         disconnect,
+        markReconnectInProgress,
         sendMessage,
         onMessage,
     };

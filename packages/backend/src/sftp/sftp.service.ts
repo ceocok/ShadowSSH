@@ -2,7 +2,6 @@ import { Client, SFTPWrapper, Stats, WriteStream } from 'ssh2';
 import { WebSocket } from 'ws';
 import { ClientState, AuthenticatedWebSocket } from '../websocket/types';
 import * as pathModule from 'path'; 
-import * as jschardet from 'jschardet'; 
 import * as iconv from 'iconv-lite';
 // +++ 导入新类型 +++
 import {
@@ -248,73 +247,9 @@ export class SftpService {
                             // Optionally add a warning?
                         }
                     } else {
-                        // 自动检测编码
-                        console.log(`[SFTP ${sessionId}] Detecting encoding for ${path} (ID: ${requestId})`);
-                        const detection = jschardet.detect(fileData);
-                        const detectedEncodingRaw = detection.encoding ? detection.encoding.toLowerCase() : 'utf-8'; // Default to utf-8 if detection fails
-                        const confidence = detection.confidence || 0;
-                        console.log(`[SFTP ${sessionId}] Detected encoding: ${detectedEncodingRaw} (confidence: ${confidence})`);
-
-                        const chineseEncodings = ['gbk', 'gb2312', 'gb18030', 'big5', 'euc-tw'];
-                        let normalizedDetected = detectedEncodingRaw.replace(/[^a-z0-9]/g, '');
-                        if (normalizedDetected === 'windows1252') normalizedDetected = 'cp1252';
-                        else if (normalizedDetected === 'gb2312') normalizedDetected = 'gbk'; // Prefer gbk
-
-                        if (normalizedDetected === 'utf8' || normalizedDetected === 'ascii') {
-                            encodingUsed = 'utf-8';
-                            decodedContent = fileData.toString('utf8');
-                            console.log(`[SFTP ${sessionId}] Decoded ${path} as UTF-8/ASCII.`);
-                        } else if (chineseEncodings.includes(normalizedDetected)) {
-                            // If detected as a common Chinese encoding, trust it and use gb18030 for broader compatibility
-                            encodingUsed = 'gb18030'; // Report gb18030 as used
-                            decodedContent = iconv.decode(fileData, encodingUsed);
-                            console.log(`[SFTP ${sessionId}] Decoded ${path} from detected Chinese encoding (${normalizedDetected}) as ${encodingUsed}.`);
-                        } else if (confidence < 0.90) { // Low confidence threshold
-                            console.warn(`[SFTP ${sessionId}] Low confidence detection (${normalizedDetected}, ${confidence}) for ${path}. Attempting GB18030 decode first.`);
-                            try {
-                                // Try decoding as GB18030 first
-                                const tempContent = iconv.decode(fileData, 'gb18030');
-                                // Basic check for Mojibake
-                                if (tempContent.includes('\uFFFD')) {
-                                     console.warn(`[SFTP ${sessionId}] GB18030 decoding resulted in replacement characters. Falling back to original detection (${normalizedDetected}) or UTF-8.`);
-                                     // Fallback: Try the originally detected encoding if supported, otherwise UTF-8
-                                     if (iconv.encodingExists(normalizedDetected)) {
-                                         encodingUsed = normalizedDetected;
-                                         decodedContent = iconv.decode(fileData, encodingUsed);
-                                         console.log(`[SFTP ${sessionId}] Falling back to decoding ${path} as originally detected ${encodingUsed}.`);
-                                     } else {
-                                         encodingUsed = 'utf-8';
-                                         decodedContent = fileData.toString('utf8');
-                                         console.log(`[SFTP ${sessionId}] Falling back to decoding ${path} as UTF-8.`);
-                                     }
-                                } else {
-                                     encodingUsed = 'gb18030'; // Success with GB18030
-                                     decodedContent = tempContent;
-                                     console.log(`[SFTP ${sessionId}] Decoded ${path} as ${encodingUsed} due to low confidence detection.`);
-                                }
-                            } catch (gbkError) {
-                                console.warn(`[SFTP ${sessionId}] Error decoding as GB18030, falling back to original detection (${normalizedDetected}) or UTF-8:`, gbkError);
-                                // Fallback: Try the originally detected encoding if supported, otherwise UTF-8
-                                if (iconv.encodingExists(normalizedDetected)) {
-                                    encodingUsed = normalizedDetected;
-                                    decodedContent = iconv.decode(fileData, encodingUsed);
-                                    console.log(`[SFTP ${sessionId}] Falling back to decoding ${path} as originally detected ${encodingUsed}.`);
-                                } else {
-                                    encodingUsed = 'utf-8';
-                                    decodedContent = fileData.toString('utf8');
-                                    console.log(`[SFTP ${sessionId}] Falling back to decoding ${path} as UTF-8.`);
-                                }
-                            }
-                        } else if (iconv.encodingExists(normalizedDetected)) {
-                            // Higher confidence, non-Chinese, supported encoding
-                            encodingUsed = normalizedDetected;
-                            decodedContent = iconv.decode(fileData, encodingUsed);
-                            console.log(`[SFTP ${sessionId}] Decoded ${path} from ${encodingUsed} using iconv-lite (high confidence).`);
-                        } else {
-                            console.warn(`[SFTP ${sessionId}] Unsupported or unknown encoding detected for ${path}: ${normalizedDetected}. Falling back to UTF-8.`);
-                            encodingUsed = 'utf-8'; // Final fallback
-                            decodedContent = fileData.toString('utf8');
-                        }
+                        encodingUsed = 'utf-8';
+                        decodedContent = fileData.toString('utf8');
+                        console.log(`[SFTP ${sessionId}] No encoding specified for ${path}; defaulting to UTF-8 (ID: ${requestId}).`);
                     }
 
                     // Final check for replacement characters after deciding the encoding

@@ -1,18 +1,13 @@
 {
-  "appName": "Nexus Terminal",
-  "projectName": "Nexus Terminal",
-  "slogan":"Stir the stars, command the terminal.",
+  "appName": "ShadowSSH",
+  "projectName": "ShadowSSH",
+  "slogan":"Lightweight SSH, focused and fast.",
   "nav": {
-    "dashboard": "Dashboard",
     "terminal": "Terminal",
     "connections": "Connections",
-    "proxies": "Proxies",
     "login": "Login",
     "logout": "Logout",
-    "notifications": "Notifications",
-    "auditLogs": "Audit Logs",
-    "settings": "Settings",
-    "customizeStyle": "Customize Style"
+    "settings": "Settings"
   },
   "styleCustomizer": {
     "title": "Appearance Customizer",
@@ -406,8 +401,29 @@
     }
   },
   "workspace": {
+    "sessionLimitReached": "You can only open up to {count} sessions at the same time.",
+    "status": {
+      "connectingWs": "Connecting WebSocket...",
+      "wsConnected": "WebSocket connected",
+      "reconnecting": "Reconnecting (attempt {attempt}, retrying in {delay}s)...",
+      "reconnectFailed": "Reconnect failed",
+      "error": "Connection error: {message}",
+      "connected": "Connected",
+      "disconnected": "Disconnected",
+      "wsClosed": "Connection closed (code {code})",
+      "wsClosedWillRetry": "Connection closed (code {code}), retrying soon",
+      "wsError": "WebSocket error",
+      "markedForSuspendNoReconnect": "Connection marked as suspended, auto reconnect disabled"
+    },
     "terminal": {
-      "reconnectingMsg": "Attempting to reconnect..."
+      "reconnectingMsg": "Attempting to reconnect...",
+      "genericErrorMsg": "Error: {message}",
+      "disconnectMsg": "Disconnected: {reason}",
+      "errorPrefix": "Error:",
+      "infoPrefix": "Info:",
+      "unknownReason": "Unknown reason",
+      "unknownSshError": "Unknown SSH error",
+      "unknownGenericError": "Unknown error"
     }
   },
 "fileEditor": {
@@ -576,7 +592,7 @@
     "title": "Server Status",
     "errorPrefix": "Error:",
     "loading": "Waiting for data...",
-    "cpuModelLabel": "CPU Model:",
+    "cpuModelLabel": "CPU:",
     "osLabel": "OS:",
     "cpuLabel": "CPU:",
     "memoryLabel": "Memory:",
@@ -1649,4 +1665,3 @@
     "copiedError": "Failed to copy path"
   }
 }
-

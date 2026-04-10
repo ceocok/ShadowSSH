@@ -27,10 +27,10 @@ export type WorkspaceEventPayloads = {
   'editor:updateScrollPosition': { tabId: string; scrollTop: number; scrollLeft: number };
  
   // Connection Events
-  'connection:connect': { connectionId: number }; // 来自 WorkspaceConnectionList 或其他地方
-  'connection:openNewSession': { connectionId: number }; // 来自 WorkspaceConnectionList
-  'connection:requestAdd': void; // 来自 WorkspaceConnectionList 或 TerminalTabBar
-  'connection:requestEdit': { connectionInfo: ConnectionInfo }; // 来自 WorkspaceConnectionList 或 TerminalTabBar
+  'connection:connect': { connectionId: number };
+  'connection:openNewSession': { connectionId: number };
+  'connection:requestAdd': void;
+  'connection:requestEdit': { connectionInfo: ConnectionInfo };
 
   // Search Events (主要由 CommandInputBar 或 PaneTitleBar 发出)
   'search:start': { term: string; sessionId?: string }; // sessionId 可选，用于指定搜索目标终端
@@ -38,7 +38,7 @@ export type WorkspaceEventPayloads = {
   'search:findPrevious': void;
   'search:close': void;
 
-  // Session Management Events (主要由 TerminalTabBar 发出)
+  // Session Management Events
   'session:activate': { sessionId: string };
   'session:close': { sessionId: string };
   'session:closeOthers': { targetSessionId: string };
@@ -46,9 +46,7 @@ export type WorkspaceEventPayloads = {
   'session:closeToLeft': { targetSessionId: string };
 
   // UI Interaction Events
-  'ui:openLayoutConfigurator': void;
-'ui:openTransferProgressModal': void; // 请求打开文件传输进度模态框
-  // 'ui:toggleVirtualKeyboard': void; // 如果决定迁移 CommandInputBar 的这个事件
+  'ui:openTransferProgressModal': void;
   'fileManager:openModalRequest': { sessionId: string }; // 请求打开文件管理器模态框
 
   // Suspended SSH Session Events

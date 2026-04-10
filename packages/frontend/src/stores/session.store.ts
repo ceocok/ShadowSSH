@@ -9,13 +9,6 @@ import { useConnectionsStore, type ConnectionInfo } from './connections.store';
 import {
   sessions,
   activeSessionId,
-  isRdpModalOpen,
-  rdpConnectionInfo,
-  isVncModalOpen,
-  vncConnectionInfo,
-  
-  suspendedSshSessions,
-  isLoadingSuspendedSessions,
 } from './session/state';
 
 
@@ -29,9 +22,7 @@ import {
 import * as sessionActions from './session/actions/sessionActions';
 import * as editorActions from './session/actions/editorActions';
 import * as sftpManagerActions from './session/actions/sftpManagerActions';
-import * as modalActions from './session/actions/modalActions';
 import * as commandInputActions from './session/actions/commandInputActions';
-import * as sshSuspendActions from './session/actions/sshSuspendActions'; 
 
 
 import type { FileInfo } from './fileEditor.store';
@@ -47,12 +38,6 @@ export const useSessionStore = defineStore('session', () => {
 
   // --- 包装 Actions 以注入依赖 ---
 
-  // Modal Actions (这些可能被其他 actions 依赖，所以先定义)
-  const openRdpModal = (connection: ConnectionInfo) => modalActions.openRdpModal(connection);
-  const closeRdpModal = () => modalActions.closeRdpModal();
-  const openVncModal = (connection: ConnectionInfo) => modalActions.openVncModal(connection);
-  const closeVncModal = () => modalActions.closeVncModal();
-
   // Session Actions
   const openNewSession = (connectionId: number | string) =>
     sessionActions.openNewSession(connectionId, { connectionsStore, t }); // 移除了 router 和不正确的 registerSshSuspendHandlers
@@ -62,13 +47,12 @@ export const useSessionStore = defineStore('session', () => {
     sessionActions.handleConnectRequest(connection, {
       connectionsStore,
       router,
-      openRdpModalAction: openRdpModal, // 传递包装后的 action
-      openVncModalAction: openVncModal,   // 传递包装后的 action
       t,
     });
   const handleOpenNewSession = (connectionId: number | string) =>
     sessionActions.handleOpenNewSession(connectionId, { connectionsStore, t }); // 移除了 router 和不正确的 registerSshSuspendHandlers
   const cleanupAllSessions = () => sessionActions.cleanupAllSessions();
+  const getPersistedOpenConnections = () => sessionActions.getPersistedOpenConnections();
 
   // SFTP Manager Actions
   const getOrCreateSftpManager = (sessionId: string, instanceId: string) =>
@@ -107,14 +91,6 @@ export const useSessionStore = defineStore('session', () => {
     // State (直接从 state 模块导出，Pinia 会处理)
     sessions,
     activeSessionId,
-    isRdpModalOpen,
-    rdpConnectionInfo,
-    isVncModalOpen,
-    vncConnectionInfo,
-    // SSH Suspend Mode State
-    suspendedSshSessions,
-    isLoadingSuspendedSessions,
-
     // Getters (直接从 getters 模块导出)
     sessionTabs,
     sessionTabsWithStatus,
@@ -127,6 +103,7 @@ export const useSessionStore = defineStore('session', () => {
     handleConnectRequest,
     handleOpenNewSession,
     cleanupAllSessions,
+    getPersistedOpenConnections,
     getOrCreateSftpManager,
     removeSftpManager,
     openFileInSession,
@@ -139,13 +116,6 @@ export const useSessionStore = defineStore('session', () => {
     closeTabsToTheRightInSession,
     closeTabsToTheLeftInSession,
     updateTabScrollPositionInSession,
-    openRdpModal,
-    closeRdpModal,
-    openVncModal,
-    closeVncModal,
     updateSessionCommandInput,
-
-    // SSH Suspend Actions (直接从模块导出，Pinia 会处理)
-    ...sshSuspendActions,
   };
 });

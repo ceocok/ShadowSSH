@@ -16,6 +16,7 @@ export interface ClientState { // 导出以便 Service 可以导入
     sshShellStream?: ClientChannel;
     dbConnectionId: number;
     connectionName?: string; // 连接名称字段
+    resolvedTargetIp?: string | null;
     sftp?: SFTPWrapper; //  sftp 实例 (由 SftpService 管理)
     statusIntervalId?: NodeJS.Timeout; // 状态轮询 ID (由 StatusMonitorService 管理)
     dockerStatusIntervalId?: NodeJS.Timeout; //  Docker 状态轮询 ID

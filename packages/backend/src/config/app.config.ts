@@ -10,7 +10,7 @@ interface AppConfig {
 }
 
 export const config: AppConfig = {
-  appName: process.env.APP_NAME || 'Nexus Terminal',
+  appName: process.env.APP_NAME || 'ShadowSSH',
   rpId: process.env.RP_ID || 'localhost', // IMPORTANT: This MUST match your domain in production
   rpOrigin: process.env.RP_ORIGIN || 'http://localhost:5173', // IMPORTANT: This MUST match your frontend origin in production
   port: parseInt(process.env.PORT || '3000', 10),

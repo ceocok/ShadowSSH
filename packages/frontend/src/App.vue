@@ -1,46 +1,28 @@
 <script setup lang="ts">
-import { RouterLink, RouterView, useRoute } from 'vue-router';
-import { ref, onMounted, onUnmounted, watch, nextTick, computed } from 'vue';
+import { RouterView, useRoute } from 'vue-router';
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { useAuthStore } from './stores/auth.store';
 import { useDeviceDetection } from './composables/useDeviceDetection';
 import { useSettingsStore } from './stores/settings.store';
-import { useAppearanceStore } from './stores/appearance.store';
-import { useLayoutStore } from './stores/layout.store';
 import { useFocusSwitcherStore } from './stores/focusSwitcher.store';
-import { useSessionStore } from './stores/session.store';
-import { useFavoritePathsStore } from './stores/favoritePaths.store';
 import { storeToRefs } from 'pinia';
 import UINotificationDisplay from './components/UINotificationDisplay.vue';
 import FileEditorOverlay from './components/FileEditorOverlay.vue';
-import StyleCustomizer from './components/StyleCustomizer.vue';
-import FocusSwitcherConfigurator from './components/FocusSwitcherConfigurator.vue';
-import RemoteDesktopModal from './components/RemoteDesktopModal.vue';
-import VncModal from './components/VncModal.vue';
 import ConfirmDialog from './components/common/ConfirmDialog.vue';
 import { useDialogStore } from './stores/dialog.store';
 
 const { t } = useI18n();
 const authStore = useAuthStore();
 const settingsStore = useSettingsStore();
-const appearanceStore = useAppearanceStore();
-const layoutStore = useLayoutStore();
 const focusSwitcherStore = useFocusSwitcherStore(); // +++ 实例化焦点切换 Store +++
-const sessionStore = useSessionStore(); // +++ 实例化 Session Store +++
 const dialogStore = useDialogStore(); // +++ 实例化 DialogStore +++
 const { state: dialogState } = storeToRefs(dialogStore); 
-const favoritePathsStore = useFavoritePathsStore(); // +++ 实例化 favoritePathsStore +++
 const { isAuthenticated } = storeToRefs(authStore);
 const { showPopupFileEditorBoolean } = storeToRefs(settingsStore);
-const { isStyleCustomizerVisible } = storeToRefs(appearanceStore);
-const { isLayoutVisible, isHeaderVisible } = storeToRefs(layoutStore); // 添加 isHeaderVisible
-const { isConfiguratorVisible: isFocusSwitcherVisible } = storeToRefs(focusSwitcherStore);
-const { isRdpModalOpen, rdpConnectionInfo, isVncModalOpen, vncConnectionInfo } = storeToRefs(sessionStore); // +++ 获取 RDP 和 VNC 状态 +++
 const { isMobile } = useDeviceDetection();
 
 const route = useRoute();
-const navRef = ref<HTMLElement | null>(null);
-const underlineRef = ref<HTMLElement | null>(null);
 
 // +++ 存储上一次由切换器聚焦的 ID +++
 const lastFocusedIdBySwitcher = ref<string | null>(null);
@@ -48,27 +30,7 @@ const isAltPressed = ref(false); // 跟踪 Alt 键是否按下
 const altShortcutKey = ref<string | null>(null);
 // --- 移除 shortcutTriggeredInKeyDown 标志 ---
 
-const updateUnderline = async () => {
-  await nextTick(); // 等待 DOM 更新
-  if (navRef.value && underlineRef.value) {
-    const activeLink = navRef.value.querySelector('.router-link-exact-active') as HTMLElement;
-    if (activeLink) {
-      const offsetBottom = 2; // 下划线距离文字底部的距离 (px)
-      underlineRef.value.style.left = `${activeLink.offsetLeft}px`;
-      underlineRef.value.style.width = `${activeLink.offsetWidth}px`;
-      // underlineRef.value.style.top = `${activeLink.offsetTop + activeLink.offsetHeight + offsetBottom}px`; // 移除 top 设置
-      underlineRef.value.style.opacity = '1'; // Make it visible
-    } else {
-      underlineRef.value.style.opacity = '0'; // Hide if no active link (e.g., on login page if not a nav link)
-    }
-  }
-};
-
 onMounted(() => {
-  // Initial position update
-  // Use setTimeout to ensure styles are applied and elements have dimensions
-  setTimeout(updateUnderline, 100);
-
   // +++ 全局 Alt 键监听器 +++
   window.addEventListener('keydown', handleAltKeyDown); // +++ 监听 keydown 设置状态 +++
   window.addEventListener('keyup', handleGlobalKeyUp);   // +++ 监听 keyup 执行切换 +++
@@ -81,18 +43,7 @@ onMounted(() => {
   window.addEventListener('appinstalled', () => {
     console.log('[App.vue] PWA was installed');
   });
-  
-  // +++ 加载 Header 可见性状态 +++
-  layoutStore.loadHeaderVisibility();
-
 });
-
-// +++ 监听用户认证状态，登录后初始化收藏路径 +++
-watch(isAuthenticated, (loggedIn) => {
-  if (loggedIn) {
-    favoritePathsStore.initializeFavoritePaths(t);
-  }
-}, { immediate: true });
 
 // +++ 卸载钩子以移除监听器 +++
 onUnmounted(() => {
@@ -101,27 +52,7 @@ onUnmounted(() => {
 });
 
 
-// *** 计算属性，判断是否在 workspace 路由 ***
 const isWorkspaceRoute = computed(() => route.path === '/workspace');
-
-watch(route, () => {
-  updateUnderline();
-}, { immediate: true }); // *** 确保 immediate: true 存在 ***
-
-
-const handleLogout = () => {
-  authStore.logout();
-};
-
-// 打开样式自定义器的方法现在直接调用 store action
-const openStyleCustomizer = () => {
-  appearanceStore.toggleStyleCustomizer(true);
-};
-
-// 关闭样式自定义器的方法现在也调用 store action
-const closeStyleCustomizer = () => {
-  appearanceStore.toggleStyleCustomizer(false);
-};
 
 // +++ 处理 Alt 键按下的事件处理函数，并记录快捷键 +++
 const handleAltKeyDown = async (event: KeyboardEvent) => { // +++ 改为 async +++
@@ -276,45 +207,9 @@ const isElementVisibleAndFocusable = (element: HTMLElement): boolean => {
 <template>
   
   <div id="app-container">
-    <!-- *** 修改 v-if 条件以使用 isHeaderVisible *** -->
-    <!-- Header with Tailwind classes using theme variables -->
-    <header v-if="!isWorkspaceRoute || isHeaderVisible" class="sticky top-0 z-10 flex items-center h-14 pl-3 pr-6 bg-header border-b border-border shadow-sm"> <!-- 减少左侧内边距 -->
-      <!-- Nav with Tailwind classes -->
-      <nav ref="navRef" class="flex items-center justify-between w-full relative"> <!-- Added relative positioning for underline -->
-        <!-- Left navigation links with Tailwind classes using theme variables -->
-        <div class="flex items-center space-x-1">
-          <!-- 项目 Logo -->
-          <img src="./assets/logo.png" alt="Project Logo" class="h-10 w-auto"> <!-- 移除右侧外边距，使其更靠左 -->
-            <RouterLink to="/" class="inline-flex px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap" active-class="text-link-active bg-nav-active-bg">{{ t('nav.dashboard') }}</RouterLink> <!-- 恢复仪表盘链接, 始终可见 -->
-            <RouterLink to="/workspace" class="inline-flex px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap" active-class="text-link-active bg-nav-active-bg">{{ t('nav.terminal') }}</RouterLink> <!-- 保持可见 -->
-            <RouterLink to="/connections" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap" active-class="text-link-active bg-nav-active-bg">{{ t('nav.connections') }}</RouterLink> <!-- 连接管理链接 -->
-            <RouterLink to="/proxies" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap" active-class="text-link-active bg-nav-active-bg">{{ t('nav.proxies') }}</RouterLink> <!-- 移动端隐藏 -->
-            <RouterLink to="/notifications" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap" active-class="text-link-active bg-nav-active-bg">{{ t('nav.notifications') }}</RouterLink> <!-- 移动端隐藏 -->
-            <RouterLink to="/audit-logs" class="hidden md:inline-flex px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap" active-class="text-link-active bg-nav-active-bg">{{ t('nav.auditLogs') }}</RouterLink> <!-- 移动端隐藏 -->
-            <RouterLink to="/settings" class="inline-flex px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap" active-class="text-link-active bg-nav-active-bg">{{ t('nav.settings') }}</RouterLink> <!-- 保持可见 -->
-        </div>
-        <!-- Right navigation links with Tailwind classes using theme variables -->
-        <div class="flex items-center space-x-1">
-          <!-- GitHub Icon (Hide on mobile) -->
-          <a v-if="!isMobile" href="https://github.com/Heavrnl/nexus-terminal" target="_blank" rel="noopener noreferrer" title="Heavrnl/nexus-terminal" class="px-2 py-2 rounded-md text-lg text-icon hover:text-icon-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8"/>
-            </svg>
-          </a>
-          <!-- PWA Install Button - REMOVED FROM HERE -->
-          <a href="#" @click.prevent="openStyleCustomizer" :title="t('nav.customizeStyle')" class="px-2 py-2 rounded-md text-lg text-icon hover:text-icon-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out"><i class="fas fa-paint-brush"></i></a>
-          <RouterLink v-if="!isAuthenticated" to="/login" class="px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap">{{ t('nav.login') }}</RouterLink>
-          <a href="#" v-if="isAuthenticated" @click.prevent="handleLogout" class="px-3 py-2 rounded-md text-sm font-medium text-secondary hover:text-link-hover hover:bg-nav-active-bg hover:no-underline transition duration-150 ease-in-out whitespace-nowrap">{{ t('nav.logout') }}</a>
-        </div>
-        <!-- Sliding underline element with Tailwind classes using theme variables (JS still controls positioning) -->
-        <div ref="underlineRef" class="absolute bottom-0 h-0.5 bg-link-active rounded transition-all duration-300 ease-in-out pointer-events-none opacity-0 transform translate-y-1.5"></div> <!-- Changed translate-y-1 to translate-y-1.5 -->
-      </nav>
-    </header>
-
     <main>
-      <!-- 使用 KeepAlive 包裹 RouterView，并指定缓存 WorkspaceView -->
       <RouterView v-slot="{ Component }">
-        <KeepAlive :include="['WorkspaceView', 'ConnectionsView']">
+        <KeepAlive :include="['WorkspaceView']">
           <component :is="Component" />
         </KeepAlive>
       </RouterView>
@@ -325,31 +220,6 @@ const isElementVisibleAndFocusable = (element: HTMLElement): boolean => {
 
     <!-- 根据设置条件渲染全局文件编辑器弹窗 -->
     <FileEditorOverlay v-if="showPopupFileEditorBoolean" :is-mobile="isMobile" />
-
-    <!-- 条件渲染样式自定义器，使用 store 的状态和方法 -->
-    <StyleCustomizer v-if="isStyleCustomizerVisible" @close="closeStyleCustomizer" />
-
-    <!-- +++ 条件渲染焦点切换配置器 (使用 v-show 保持实例) +++ -->
-    <FocusSwitcherConfigurator
-      v-show="isFocusSwitcherVisible"
-      :isVisible="isFocusSwitcherVisible"
-      @close="focusSwitcherStore.toggleConfigurator(false)"
-    />
-
-    <!-- +++ 条件渲染 RDP 模态框 +++ -->
-    <RemoteDesktopModal
-      v-if="isRdpModalOpen"
-      :connection="rdpConnectionInfo"
-      @close="sessionStore.closeRdpModal()"
-    />
-
-    <!-- +++ 条件渲染 VNC 模态框 +++ -->
-    <VncModal
-      v-if="isVncModalOpen"
-      :connection="vncConnectionInfo"
-      @close="sessionStore.closeVncModal()"
-    />
-
     <!-- +++ 全局确认对话框 +++ -->
     <ConfirmDialog
           :visible="dialogState.visible"

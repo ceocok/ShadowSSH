@@ -6,9 +6,7 @@ const routes: Array<RouteRecordRaw> = [
   // 首页/仪表盘 (占位符)
   {
     path: '/',
-    name: 'Dashboard',
-    component: () => import('../views/DashboardView.vue') // 指向实际的仪表盘组件
-    // component: { template: '<div>仪表盘 (建设中)</div>' } // 移除临时占位
+    redirect: { name: 'Workspace' }
   },
   // 登录页面 (占位符)
   {
@@ -16,48 +14,12 @@ const routes: Array<RouteRecordRaw> = [
     name: 'Login',
     component: () => import('../views/LoginView.vue') // 指向实际的登录组件
   },
-  // 代理管理页面
-  {
-    path: '/proxies',
-    name: 'Proxies',
-     component: () => import('../views/ProxiesView.vue')
-   },
-   // 连接管理页面
-   {
-     path: '/connections',
-     name: 'Connections',
-     component: () => import('../views/ConnectionsView.vue')
-   },
-   // 移除：标签管理页面路由
-   // {
-   //   path: '/tags',
-   //   name: 'Tags',
-   //   component: () => import('../views/TagsView.vue')
-   // },
    // 工作区页面 (不再需要 connectionId 参数)
    {
     path: '/workspace', // 移除动态路由段
     name: 'Workspace',
     component: () => import('../views/WorkspaceView.vue'),
     // props: true // 不再需要传递 props
-  },
-  // 设置页面
-  {
-    path: '/settings',
-    name: 'Settings',
-    component: () => import('../views/SettingsView.vue')
-  },
-  // 通知管理页面
-  {
-    path: '/notifications',
-    name: 'Notifications',
-    component: () => import('../views/NotificationsView.vue')
-  },
-  // 审计日志页面
-  {
-    path: '/audit-logs',
-    name: 'AuditLogs',
-    component: () => import('../views/AuditLogView.vue')
   },
   // 初始设置页面
   {
@@ -94,7 +56,7 @@ router.beforeEach((to, from, next) => {
   } else if (!needsSetup && to.name === 'Setup') {
      // 如果不需要设置，但尝试访问设置页面，重定向到登录页或首页
      console.log('路由守卫：不需要设置，从 /setup 重定向');
-     next(authStore.isAuthenticated ? { name: 'Dashboard' } : { name: 'Login' });
+     next(authStore.isAuthenticated ? { name: 'Workspace' } : { name: 'Login' });
   } else if (requiresAuth && !authStore.isAuthenticated && !needsSetup) {
     // 如果需要认证、用户未登录且不需要设置，重定向到登录页
     console.log('路由守卫：未登录，重定向到 /login');
@@ -102,7 +64,7 @@ router.beforeEach((to, from, next) => {
   } else if (to.name === 'Login' && authStore.isAuthenticated && !needsSetup) {
     // 如果用户已登录、不需要设置且尝试访问登录页，重定向到仪表盘
     console.log('路由守卫：已登录，从 /login 重定向到 /');
-    next({ name: 'Dashboard' });
+    next({ name: 'Workspace' });
   } else {
     // 其他情况（例如访问公共页面，或已登录访问需认证页面）允许导航
     next();

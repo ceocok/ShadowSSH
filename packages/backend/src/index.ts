@@ -41,30 +41,12 @@ import { getDbInstance } from './database/connection';
 import authRouter from './auth/auth.routes';
 import connectionsRouter from './connections/connections.routes';
 import sftpRouter from './sftp/sftp.routes';
-import proxyRoutes from './proxies/proxies.routes';
 import tagsRouter from './tags/tags.routes';
-import settingsRoutes from './settings/settings.routes';
-import notificationRoutes from './notifications/notification.routes';
-import auditRoutes from './audit/audit.routes';
-import commandHistoryRoutes from './command-history/command-history.routes';
-import quickCommandsRoutes from './quick-commands/quick-commands.routes';
-import terminalThemeRoutes from './terminal-themes/terminal-theme.routes';
-import appearanceRoutes from './appearance/appearance.routes';
-import sshKeysRouter from './ssh_keys/ssh_keys.routes'; 
-import quickCommandTagRoutes from './quick-command-tags/quick-command-tag.routes'; 
-import sshSuspendRouter from './ssh-suspend/ssh-suspend.routes';
 import { transfersRoutes } from './transfers/transfers.routes';
-import pathHistoryRoutes from './path-history/path-history.routes';
-import favoritePathsRouter from './favorite-paths/favorite-paths.routes';
 import { initializeWebSocket } from './websocket';
-import { ipWhitelistMiddleware } from './auth/ipWhitelist.middleware';
 
 
 import './services/event.service'; 
-import './notifications/notification.processor.service'; 
-import './notifications/notification.dispatcher.service'; 
-
-
 
 // --- 全局错误处理 ---
 // 捕获未处理的 Promise Rejection
@@ -174,7 +156,6 @@ const server = http.createServer(app);
 app.set('trust proxy', true);
 
 // --- 中间件 ---
-app.use(ipWhitelistMiddleware as RequestHandler);
 app.use(express.json());
 
 // --- 静态文件服务 ---
@@ -194,6 +175,22 @@ declare module 'express-session' {
 }
 
 const port = process.env.PORT || 3001;
+const host = process.env.HOST || '0.0.0.0';
+
+const resolveSessionStorePath = () => {
+    if (process.env.SESSION_STORE_DIR) {
+        return process.env.SESSION_STORE_DIR;
+    }
+
+    const isRunningInsideAppContainer =
+        process.cwd().startsWith('/app') || __dirname.startsWith('/app');
+
+    if (isRunningInsideAppContainer) {
+        return path.join('/app/data', 'sessions');
+    }
+
+    return path.resolve(__dirname, '../data/sessions');
+};
 
 // 初始化数据库
 const initializeDatabase = async () => {
@@ -220,8 +217,7 @@ const initializeDatabase = async () => {
 const startServer = () => {
     // --- 会话中间件配置 ---
     const FileStore = sessionFileStore(session);
-    // 修改路径以匹配 Docker volume 挂载点 /app/data
-    const sessionsPath = path.join('/app/data', 'sessions');
+    const sessionsPath = resolveSessionStorePath();
     if (!fs.existsSync(sessionsPath)) {
         fs.mkdirSync(sessionsPath, { recursive: true });
     }
@@ -248,21 +244,8 @@ const startServer = () => {
     app.use('/api/v1/auth', authRouter);
     app.use('/api/v1/connections', connectionsRouter);
     app.use('/api/v1/sftp', sftpRouter);
-    app.use('/api/v1/proxies', proxyRoutes);
     app.use('/api/v1/tags', tagsRouter);
-    app.use('/api/v1/settings', settingsRoutes);
-    app.use('/api/v1/notifications', notificationRoutes);
-    app.use('/api/v1/audit-logs', auditRoutes);
-    app.use('/api/v1/command-history', commandHistoryRoutes);
-    app.use('/api/v1/quick-commands', quickCommandsRoutes);
-    app.use('/api/v1/terminal-themes', terminalThemeRoutes);
-    app.use('/api/v1/appearance', appearanceRoutes);
-    app.use('/api/v1/ssh-keys', sshKeysRouter); 
-    app.use('/api/v1/quick-command-tags', quickCommandTagRoutes);
-    app.use('/api/v1/ssh-suspend', sshSuspendRouter); 
     app.use('/api/v1/transfers', transfersRoutes());
-    app.use('/api/v1/path-history', pathHistoryRoutes);
-    app.use('/api/v1/favorite-paths', favoritePathsRouter);
     
     // 状态检查接口
     app.get('/api/v1/status', (req: Request, res: Response) => {
@@ -271,8 +254,8 @@ const startServer = () => {
     // --- 结束 API 路由 ---
 
 
-    server.listen(port, () => {
-        console.log(`后端服务器正在监听 http://localhost:${port}`);
+    server.listen(Number(port), host, () => {
+        console.log(`后端服务器正在监听 http://${host}:${port}`);
         initializeWebSocket(server, sessionMiddleware as RequestHandler); // Initialize existing WebSocket
 
     });

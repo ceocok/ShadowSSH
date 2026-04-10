@@ -1,6 +1,18 @@
-FROM node:20 AS builder
+FROM node:20-alpine AS builder
 
 WORKDIR /app
+
+ENV npm_config_proxy= \
+    npm_config_https_proxy= \
+    npm_config_noproxy= \
+    HTTP_PROXY= \
+    HTTPS_PROXY= \
+    ALL_PROXY= \
+    NO_PROXY= \
+    http_proxy= \
+    https_proxy= \
+    all_proxy= \
+    no_proxy=
 
 
 # Copy root package files
@@ -9,10 +21,12 @@ COPY package.json package-lock.json ./
 # Copy workspace package.json files to ensure npm ci works correctly in monorepo
 COPY packages/backend/package.json ./packages/backend/
 COPY packages/frontend/package.json ./packages/frontend/
-COPY packages/remote-gateway/package.json ./packages/remote-gateway/
 
-# Install dependencies (using install instead of ci for potential armv7 compatibility issues)
-RUN npm install
+# Install monorepo dependencies for build
+RUN unset http_proxy https_proxy all_proxy HTTP_PROXY HTTPS_PROXY ALL_PROXY npm_config_proxy npm_config_https_proxy npm_config_noproxy \
+    && npm config delete proxy || true \
+    && npm config delete https-proxy || true \
+    && npm ci
 
 
 COPY packages/frontend/src ./packages/frontend/src
@@ -20,9 +34,6 @@ COPY packages/frontend/index.html ./packages/frontend/
 COPY packages/frontend/tsconfig.json ./packages/frontend/
 COPY packages/frontend/vite.config.ts ./packages/frontend/
 COPY packages/frontend/public ./packages/frontend/public/
-
-# Copy the root .env file into the builder stage so Vite can read it during build
-COPY .env ./.env
 
 RUN npm run build --workspace=@nexus-terminal/frontend
 

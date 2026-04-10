@@ -6,19 +6,72 @@ import { useI18n } from 'vue-i18n';
 import { useConnectionsStore, type ConnectionInfo } from '../../connections.store'; 
 import { sessions, activeSessionId } from '../state';
 import { generateSessionId } from '../utils';
-import type { SessionState, SshTerminalInstance, StatusMonitorInstance, DockerManagerInstance, SftpManagerInstance, WsManagerInstance } from '../types';
+import type { SessionState, SshTerminalInstance, StatusMonitorInstance, SftpManagerInstance, WsManagerInstance } from '../types';
 
 
 import { createWebSocketConnectionManager } from '../../../composables/useWebSocketConnection';
 import { createSshTerminalManager, type SshTerminalDependencies } from '../../../composables/useSshTerminal';
 import { createStatusMonitorManager, type StatusMonitorDependencies } from '../../../composables/useStatusMonitor';
-import { createDockerManager, type DockerManagerDependencies } from '../../../composables/useDockerManager';
-import { registerSshSuspendHandlers } from './sshSuspendActions'; 
 
+const LAST_CONNECTED_SSH_KEY = 'shadowssh:last-connected-ssh-connection-id';
+const OPEN_CONNECTION_IDS_KEY = 'shadowssh:open-ssh-connection-ids';
+const ACTIVE_OPEN_CONNECTION_ID_KEY = 'shadowssh:active-open-ssh-connection-id';
+const MANUAL_CLOSE_ALL_KEY = 'shadowssh:manual-close-all';
+const MAX_PARALLEL_SSH_SESSIONS = 9;
 
 // --- 辅助函数 (特定于此模块的 actions) ---
 const findConnectionInfo = (connectionId: number | string, connectionsStore: ReturnType<typeof useConnectionsStore>): ConnectionInfo | undefined => {
   return connectionsStore.connections.find(c => c.id === Number(connectionId));
+};
+
+const persistLastConnectedSshConnection = (connectionId: string) => {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(LAST_CONNECTED_SSH_KEY, connectionId);
+};
+
+const persistOpenConnectionsSnapshot = () => {
+  if (typeof window === 'undefined') return;
+
+  const orderedSessions = Array.from(sessions.value.values()).sort((a, b) => a.createdAt - b.createdAt);
+  const openConnectionIds = orderedSessions.map(session => session.connectionId);
+  window.localStorage.setItem(OPEN_CONNECTION_IDS_KEY, JSON.stringify(openConnectionIds));
+
+  const activeConnectionId = activeSessionId.value
+    ? sessions.value.get(activeSessionId.value)?.connectionId ?? null
+    : null;
+
+  if (activeConnectionId) {
+    window.localStorage.setItem(ACTIVE_OPEN_CONNECTION_ID_KEY, activeConnectionId);
+  } else {
+    window.localStorage.removeItem(ACTIVE_OPEN_CONNECTION_ID_KEY);
+  }
+
+  window.localStorage.setItem(MANUAL_CLOSE_ALL_KEY, openConnectionIds.length === 0 ? 'true' : 'false');
+};
+
+export const getPersistedOpenConnections = () => {
+  if (typeof window === 'undefined') {
+    return { connectionIds: [] as string[], activeConnectionId: null as string | null, manualCloseAll: false };
+  }
+
+  let connectionIds: string[] = [];
+  try {
+    const raw = window.localStorage.getItem(OPEN_CONNECTION_IDS_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        connectionIds = parsed.map(String).filter(Boolean);
+      }
+    }
+  } catch (error) {
+    console.error('[SessionActions] 解析持久化连接列表失败:', error);
+  }
+
+  return {
+    connectionIds,
+    activeConnectionId: window.localStorage.getItem(ACTIVE_OPEN_CONNECTION_ID_KEY),
+    manualCloseAll: window.localStorage.getItem(MANUAL_CLOSE_ALL_KEY) === 'true',
+  };
 };
 
 // --- Actions ---
@@ -56,10 +109,11 @@ export const openNewSession = (
   const isResume = !!existingSessionId; // 如果提供了 existingSessionId，则为恢复流程
 
   // 稍后创建 wsManager，先创建 SessionState 对象的一部分
-  const newSessionPartial: Omit<SessionState, 'wsManager' | 'sftpManagers' | 'terminalManager' | 'statusMonitorManager' | 'dockerManager'> & { wsManager?: WsManagerInstance } = {
+  const newSessionPartial: Omit<SessionState, 'wsManager' | 'sftpManagers' | 'terminalManager' | 'statusMonitorManager'> & { wsManager?: WsManagerInstance } = {
       sessionId: newSessionId,
       connectionId: dbConnId,
       connectionName: connInfo.name || connInfo.host,
+      resolvedTargetIp: null,
       editorTabs: ref([]),
       activeEditorTabId: ref(null),
       commandInputContent: ref(''),
@@ -88,16 +142,12 @@ export const openNewSession = (
   };
   const terminalManager = createSshTerminalManager(newSessionId, sshTerminalDeps, t);
   const statusMonitorDeps: StatusMonitorDependencies = {
-      onMessage: wsManager.onMessage,
-      isConnected: wsManager.isConnected,
-  };
-  const statusMonitorManager = createStatusMonitorManager(newSessionId, statusMonitorDeps);
-  const dockerManagerDeps: DockerManagerDependencies = {
       sendMessage: wsManager.sendMessage,
       onMessage: wsManager.onMessage,
       isConnected: wsManager.isConnected,
+      suppressDisconnectError: wsManager.suppressDisconnectError,
   };
-  const dockerManager = createDockerManager(newSessionId, dockerManagerDeps, { t });
+  const statusMonitorManager = createStatusMonitorManager(newSessionId, statusMonitorDeps);
 
   // 2. 完成 SessionState 对象
   const newSession: SessionState = {
@@ -106,7 +156,6 @@ export const openNewSession = (
       sftpManagers: new Map<string, SftpManagerInstance>(),
       terminalManager: terminalManager,
       statusMonitorManager: statusMonitorManager,
-      dockerManager: dockerManager,
   };
   // newSession.isMarkedForSuspend 已经在 newSessionPartial 中初始化为 false
 
@@ -133,6 +182,9 @@ export const openNewSession = (
         console.warn(`[SessionActions/ssh:connected] 后端CID ${backendCID} 与会话 ${originalFrontendSessionIdForHandler} 的期望CID ${sessionToUpdate.connectionId} 不匹配。终止SID更新。`);
         return;
       }
+
+      persistLastConnectedSshConnection(backendCID);
+      sessionToUpdate.resolvedTargetIp = connectedPayload.resolvedHostIp ?? sessionToUpdate.resolvedTargetIp ?? null;
 
       if (backendSID && backendSID !== originalFrontendSessionIdForHandler) {
         console.log(`[SessionActions/ssh:connected] 会话ID需要更新：从 ${originalFrontendSessionIdForHandler} 到 ${backendSID}。`);
@@ -175,22 +227,15 @@ export const openNewSession = (
   console.log(`[SessionActions] Generated WebSocket URL: ${wsUrl}`);
   wsManager.connect(wsUrl);
   console.log(`[SessionActions] 已为会话 ${newSessionId} 启动 WebSocket 连接。`);
+  persistOpenConnectionsSnapshot();
 
-  // 注册 SSH 挂起相关的 WebSocket 消息处理器
-  // 确保只对 SSH 类型的连接注册 (虽然 wsManager 本身不包含类型信息，但 openNewSession 通常只为 SSH 调用)
-  // 如果 connInfo 存在且类型为 SSH，则注册
-  if (connInfo && connInfo.type === 'SSH') {
-    registerSshSuspendHandlers(wsManager);
-    console.log(`[SessionActions] 已为 SSH 会话 ${newSessionId} 注册 SSH 挂起处理器。`);
-  } else if (connInfo) {
-    console.log(`[SessionActions] 会话 ${newSessionId} 类型为 ${connInfo.type}，不注册 SSH 挂起处理器。`);
-  }
 };
 
 export const activateSession = (sessionId: string) => {
   if (sessions.value.has(sessionId)) {
     if (activeSessionId.value !== sessionId) {
       activeSessionId.value = sessionId;
+      persistOpenConnectionsSnapshot();
       console.log(`[SessionActions] 已激活会话: ${sessionId}`);
     } else {
       console.log(`[SessionActions] 会话 ${sessionId} 已经是活动状态。`);
@@ -232,9 +277,6 @@ export const closeSession = (sessionId: string) => {
   console.log(`[SessionActions] 已为会话 ${sessionId} 调用 terminalManager.cleanup()`);
   sessionToClose.statusMonitorManager.cleanup();
   console.log(`[SessionActions] 已为会话 ${sessionId} 调用 statusMonitorManager.cleanup()`);
-  sessionToClose.dockerManager.cleanup();
-  console.log(`[SessionActions] 已为会话 ${sessionId} 调用 dockerManager.cleanup()`);
-
   // 2. 从 Map 中移除会话
   const newSessionsMap = new Map(sessions.value);
   newSessionsMap.delete(sessionId);
@@ -248,6 +290,7 @@ export const closeSession = (sessionId: string) => {
     activeSessionId.value = nextActiveId;
     console.log(`[SessionActions] 关闭活动会话后，切换到: ${nextActiveId}`);
   }
+  persistOpenConnectionsSnapshot();
 };
 
 export const handleConnectRequest = (
@@ -255,46 +298,24 @@ export const handleConnectRequest = (
     dependencies: {
         connectionsStore: ReturnType<typeof useConnectionsStore>;
         router: ReturnType<typeof useRouter>;
-        openRdpModalAction: (connection: ConnectionInfo) => void; // 来自 modalActions
-        openVncModalAction: (connection: ConnectionInfo) => void; // 来自 modalActions
         t: ReturnType<typeof useI18n>['t'];
     }
 ) => {
-  const { connectionsStore, router, openRdpModalAction, openVncModalAction, t } = dependencies;
-
-  if (connection.type === 'RDP') {
-    openRdpModalAction(connection);
-  } else if (connection.type === 'VNC') {
-    openVncModalAction(connection);
-  } else {
-    const connIdStr = String(connection.id);
-    let activeAndDisconnected = false;
-
-    if (activeSessionId.value) {
-      const currentActiveSession = sessions.value.get(activeSessionId.value);
-      if (currentActiveSession && currentActiveSession.connectionId === connIdStr) {
-        const currentStatus = currentActiveSession.wsManager.connectionStatus.value;
-        console.log(`[SessionActions] 点击的是当前活动会话 ${activeSessionId.value}，状态: ${currentStatus}`);
-        if (currentStatus === 'disconnected' || currentStatus === 'error') {
-          activeAndDisconnected = true;
-          console.log(`[SessionActions] 活动会话 ${activeSessionId.value} 已断开或出错，尝试重连...`);
-          const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-          const wsHostAndPort = window.location.host;
-          const wsUrl = `${protocol}//${wsHostAndPort}/ws/`;
-          console.log(`[SessionActions handleConnectRequest] Generated WebSocket URL for reconnect: ${wsUrl}`);
-          currentActiveSession.wsManager.connect(wsUrl);
-          activateSession(activeSessionId.value);
-          router.push({ name: 'Workspace' });
-        }
-      }
-    }
-
-    if (!activeAndDisconnected) {
-      console.log(`[SessionActions] 不满足重连条件或点击了其他连接，将打开新会话 for ID: ${connIdStr}`);
-      openNewSession(connIdStr, { connectionsStore, t });
-      router.push({ name: 'Workspace' });
-    }
+  const { connectionsStore, router, t } = dependencies;
+  const connIdStr = String(connection.id);
+  if (sessions.value.size >= MAX_PARALLEL_SSH_SESSIONS) {
+    console.warn(`[SessionActions] 已达到最大并行 SSH 会话数限制: ${MAX_PARALLEL_SSH_SESSIONS}`);
+    return {
+      opened: false as const,
+      reason: 'session_limit' as const,
+      message: t('workspace.sessionLimitReached', { count: MAX_PARALLEL_SSH_SESSIONS }),
+    };
   }
+
+  console.log(`[SessionActions] 为连接 ${connIdStr} 创建新的并行会话实例。`);
+  openNewSession(connIdStr, { connectionsStore, t });
+  router.push({ name: 'Workspace' });
+  return { opened: true as const };
 };
 
 export const handleOpenNewSession = (
