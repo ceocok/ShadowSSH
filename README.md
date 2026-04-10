@@ -1,6 +1,13 @@
 # ShadowSSH
 
 一个轻量、固定布局、偏原生客户端体验的 Web SSH 工具。
+![ScreenShot_2026-04-10_003824_281.png](https://zhengzi.cococ.eu.org/file/ScreenShot_2026-04-10_003824_281.png)
+![ScreenShot_2026-04-10_003844_281.png](https://zhengzi.cococ.eu.org/file/ScreenShot_2026-04-10_003844_281.png)
+![ScreenShot_2026-04-10_123927_492.png](https://zhengzi.cococ.eu.org/file/ScreenShot_2026-04-10_123927_492.png)
+![026-04-10.png](https://zhengzi.cococ.eu.org/file/026-04-10.png)
+
+![123222d.png](https://zhengzi.cococ.eu.org/file/123222d.png)
+![1231232.png](https://zhengzi.cococ.eu.org/file/1231232.png)
 
 ShadowSSH 的定位不是“大而全后台”，而是更接近桌面 SSH 客户端的使用方式：
 
