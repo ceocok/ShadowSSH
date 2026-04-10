@@ -73,10 +73,50 @@ shadowssh/
 
 ### 方式一：直接使用已发布镜像
 
-当前 `docker-compose.yml` 已改成直接拉取镜像：
+```bash
+mkdir -p /opt/shadowssh
+cd /opt/shadowssh
 
-- `ceocok/shadowssh-frontend:latest`
-- `ceocok/shadowssh-backend:latest`
+cat > docker-compose.yml << 'EOF'
+services:
+  frontend:
+    image: ceocok/shadowssh-frontend:latest
+    pull_policy: always
+    container_name: shadowssh-frontend
+    restart: unless-stopped
+    ports:
+      - "18111:80"
+    depends_on:
+      - backend
+    networks:
+      - shadowssh-network
+
+  backend:
+    image: ceocok/shadowssh-backend:latest
+    pull_policy: always
+    container_name: shadowssh-backend
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+    volumes:
+      - ./data:/app/data
+    networks:
+      - shadowssh-network
+
+networks:
+  shadowssh-network:
+    driver: bridge
+    name: shadowssh-network
+    enable_ipv6: true
+    ipam:
+      config:
+        - subnet: fd01::/80
+          gateway: fd01::1
+EOF
+```
+
+
 
 启动：
 
@@ -217,7 +257,9 @@ docker compose down
 
 ## 当前产品方向
 
-ShadowSSH 当前已经收缩成更纯的 SSH 客户端，重点保留：
+当前项目基于 https://github.com/Heavrnl/nexus-terminal 进行开发
+
+ShadowSSH 已经收缩成更纯的 SSH 客户端，重点保留：
 
 - SSH
 - SFTP
@@ -225,7 +267,7 @@ ShadowSSH 当前已经收缩成更纯的 SSH 客户端，重点保留：
 - 多标签会话
 - 移动端使用体验
 
-已经删除了大量旧平台化功能，例如：
+删除了大量平台化功能，例如：
 
 - 仪表盘
 - 通知管理
